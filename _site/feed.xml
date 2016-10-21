@@ -5,85 +5,329 @@
     <description>iOS 开发分享</description>
     <link>/</link>
     <atom:link href="/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 11 Oct 2016 17:20:54 +0800</pubDate>
-    <lastBuildDate>Tue, 11 Oct 2016 17:20:54 +0800</lastBuildDate>
+    <pubDate>Fri, 21 Oct 2016 10:50:54 +0800</pubDate>
+    <lastBuildDate>Fri, 21 Oct 2016 10:50:54 +0800</lastBuildDate>
     <generator>Jekyll v3.2.1</generator>
     
       <item>
-        <title>Hello 2015</title>
-        <description>&lt;blockquote&gt;
-  &lt;p&gt;“Yeah It’s on. ”&lt;/p&gt;
-&lt;/blockquote&gt;
+        <title>有关浮点数的那些事</title>
+        <description>&lt;h1 id=&quot;section&quot;&gt;有关浮点数的那些事&lt;/h1&gt;
 
-&lt;h2 id=&quot;section&quot;&gt;前言&lt;/h2&gt;
+&lt;h2 id=&quot;section-1&quot;&gt;几个小问题&lt;/h2&gt;
 
-&lt;p&gt;Hux 的 Blog 就这么开通了。&lt;/p&gt;
+&lt;ol&gt;
+  &lt;li&gt;浮点数可以准确表示0吗？&lt;/li&gt;
+  &lt;li&gt;浮点数精度为什么是1.19092896-e7&lt;/li&gt;
+  &lt;li&gt;浮点数是否可以判等？&lt;/li&gt;
+  &lt;li&gt;下面两段代码的运行速度如何&lt;/li&gt;
+&lt;/ol&gt;
 
-&lt;p&gt;&lt;a href=&quot;#build&quot;&gt;跳过废话，直接看技术实现 &lt;/a&gt;&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
+   const float z = 1.111;
+   float y = x;
+   for(int j = 0; j &amp;lt; 10000000; j++)
+   {
+       y *= x;
+       y /= z;
+       y += 0;
+       y -= 0;
+   }
+   return 0;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
 
-&lt;p&gt;2015 年，Hux 总算有个地方可以好好写点东西了。&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
+   const float z = 1.111;
+   float y = x;
+   for(int j = 0; j &amp;lt; 10000000; j++)
+   {
+       y *= x;
+       y /= z;
+       y += 0.1;
+       y -= 0.1;
+   }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;p&gt;本文会从浮点数的表示方法入手回答一下上面的几个问题。&lt;/p&gt;
 
-&lt;p&gt;作为一个程序员， Blog 这种轮子要是挂在大众博客程序上就太没意思了。一是觉得大部分 Blog 服务都太丑，二是觉得不能随便定制不好玩。之前因为太懒没有折腾，结果就一直连个写 Blog 的地儿都没有。&lt;/p&gt;
+&lt;h2 id=&quot;section-2&quot;&gt;浮点数的表示方法&lt;/h2&gt;
 
-&lt;p&gt;在玩了一段时间知乎之后，答题的快感又激起了我开博客的冲动。之前的&lt;a href=&quot;http://huangxuan.me/portfolio&quot;&gt;个人网站&lt;/a&gt;是作品集形式的（现在集成进来了），并不适合用来写博文，一不做二不休，花一天搞一个吧！&lt;/p&gt;
+&lt;p&gt;IEEE-754对浮点数的定义如下&lt;/p&gt;
 
-&lt;p id=&quot;build&quot;&gt;&lt;/p&gt;
-&lt;hr /&gt;
-
-&lt;h2 id=&quot;section-1&quot;&gt;正文&lt;/h2&gt;
-
-&lt;p&gt;接下来说说搭建这个博客的技术细节。&lt;/p&gt;
-
-&lt;p&gt;正好之前就有关注过 &lt;a href=&quot;https://pages.github.com/&quot;&gt;GitHub Pages&lt;/a&gt; + &lt;a href=&quot;http://jekyllrb.com/&quot;&gt;Jekyll&lt;/a&gt; 快速 Building Blog 的技术方案，非常轻松时尚。&lt;/p&gt;
-
-&lt;p&gt;其优点非常明显：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Type&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Sign&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Actual Exponent&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Exp (biased)&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Exponent field&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Significand (fraction field)&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;Value&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Zero&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−127&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0.0&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Negative zero&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−127&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−0.0&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;One&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;127&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1.0&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Minus One&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;127&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−1.0&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Smallest denormalized number&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0001&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;±2−23 × 2−126 = ±2−149 ≈ ±1.4×10−45&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;“Middle” denormalized number&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;100 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;±2−1 × 2−126 = ±2−127 ≈ ±5.88×10−39&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Largest denormalized number&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;111 1111 1111 1111 1111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;±(1−2−23) × 2−126 ≈ ±1.18×10−38&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Smallest normalized number&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0000 0001&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;±2−126 ≈ ±1.18×10−38&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Largest normalized number&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;127&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;254&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1111 1110&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;111 1111 1111 1111 1111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;±(2−2−23) × 2127 ≈ ±3.4×1038&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Positive infinity&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;128&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;255&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;+∞&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Negative infinity&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;128&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;255&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;−∞&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;Not a number&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;128&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;255&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;1111 1111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;non zero&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;NaN&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
 
 &lt;ul&gt;
-  &lt;li&gt;&lt;strong&gt;Markdown&lt;/strong&gt; 带来的优雅写作体验&lt;/li&gt;
-  &lt;li&gt;非常熟悉的 Git workflow ，&lt;strong&gt;Git Commit 即 Blog Post&lt;/strong&gt;&lt;/li&gt;
-  &lt;li&gt;利用 GitHub Pages 的域名和免费无限空间，不用自己折腾主机
-    &lt;ul&gt;
-      &lt;li&gt;如果需要自定义域名，也只需要简单改改 DNS 加个 CNAME 就好了&lt;/li&gt;
-    &lt;/ul&gt;
-  &lt;/li&gt;
-  &lt;li&gt;Jekyll 的自定制非常容易，基本就是个模版引擎&lt;/li&gt;
+  &lt;li&gt;Sign bit can be either 0 or 1 .&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;p&gt;本来觉得最大的缺点可能是 GitHub 在国内访问起来太慢，所以第二天一起床就到 GitCafe(Chinese GitHub Copy，现在被 Coding 收购了) 迁移了一个&lt;a href=&quot;http://huxpro.coding.me&quot;&gt;镜像&lt;/a&gt;出来，结果还是巨慢。&lt;/p&gt;
+&lt;p&gt;从上述定义中可以回答第一个问题：&lt;strong&gt;浮点数可以精确表示0&lt;/strong&gt;，用代码验证即&lt;/p&gt;
 
-&lt;p&gt;哥哥可是个前端好嘛！ 果断开 Chrome DevTool 查了下网络请求，原来是 &lt;strong&gt;pending 在了 Google Fonts&lt;/strong&gt; 上，页面渲染一直被阻塞到请求超时为止，难怪这么慢。&lt;br /&gt;
-忍痛割爱，只好把 Web Fonts 去了（反正超时看到的也只能是 fallback ），果然一下就正常了，而且 GitHub 和 GitCafe 对比并没有感受到明显的速度差异，虽然 github 的 ping 值明显要高一些，达到了 300ms，于是用 DNSPOD 优化了一下速度。&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float zero1 = 0.0;
+float zero2 = 0.0;
+if (zero1 == zero2) 
+{
+	printf(@&quot;zero1 = zero2&quot;); //must setup in if block
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
 
-&lt;hr /&gt;
+&lt;p&gt;总结&lt;strong&gt;浮点数定义的规律&lt;/strong&gt;如下：&lt;/p&gt;
 
-&lt;p&gt;配置的过程中也没遇到什么坑，基本就是 Git 的流程，相当顺手&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;指数位为00000000时，
+    &lt;ol&gt;
+      &lt;li&gt;数字位为全0时，若符号位为0，则表示正零0.0 ；若符号位为1时，表示负零-0.0&lt;/li&gt;
+      &lt;li&gt;数字位不全为零，表示非标浮点数(denormalized number)，此时默认第一位不是1，而是0（标准浮点数为了更大限度的表示数字，认为数字位都是小数点之后的数，并且默认小数点前一位为1）&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/li&gt;
+  &lt;li&gt;指数位为11111111时，
+    &lt;ol&gt;
+      &lt;li&gt;数字为全为0时，若符号位为0 ，则表示正无穷，若符号位为1，则表示负无穷&lt;/li&gt;
+      &lt;li&gt;数字为补全为0，表示这不是一个数NaN&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/li&gt;
+  &lt;li&gt;因此指数位范围为00000001~11111110 （1~254）
+    &lt;ol&gt;
+      &lt;li&gt;而为了表示小数部分，指数部分需要减127，因此，指数实际范围为-126~127，标准浮点数指数能表示的范围也就是 2^-126 ~2^127&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
 
-&lt;p&gt;大的 Jekyll 主题上直接 fork 了 Clean Blog（这个主题也相当有名，就不多赘述了。唯一的缺点大概就是没有标签支持，于是我给它补上了。）&lt;/p&gt;
+&lt;h2 id=&quot;section-3&quot;&gt;浮点数的精度&lt;/h2&gt;
 
-&lt;p&gt;本地调试环境需要 &lt;code class=&quot;highlighter-rouge&quot;&gt;gem install jekyll&lt;/code&gt;，结果 rubygem 的源居然被墙了……后来手动改成了我大淘宝的镜像源才成功&lt;/p&gt;
+&lt;p&gt;浮点数的精度宏FLT_EPSILON = 1.19092896-e7。
+IEEE对FLT_EPSILON的定义为&lt;/p&gt;
 
-&lt;p&gt;Theme 的 CSS 是基于 Bootstrap 定制的，看得不爽的地方直接在 Less 里改就好了（平时更习惯 SCSS 些），&lt;strong&gt;不过其实我一直觉得 Bootstrap 在移动端的体验做得相当一般，比我在淘宝参与的团队 CSS 框架差多了……&lt;/strong&gt;所以为了体验，也补了不少 CSS 进去&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
 
-&lt;p&gt;最后就进入了耗时反而最长的&lt;strong&gt;做图、写字&lt;/strong&gt;阶段，也算是进入了&lt;strong&gt;写博客&lt;/strong&gt;的正轨，因为是类似 Hack Day 的方式去搭这个站的，所以折腾折腾着大半夜就过去了。&lt;/p&gt;
+&lt;p&gt;再回到上一章看浮点数，1.0 = 指数位和数字为都为0的数，即&lt;/p&gt;
 
-&lt;p&gt;第二天考虑中文字体的渲染，fork 了 &lt;a href=&quot;http://www.typeisbeautiful.com/&quot;&gt;Type is Beautiful&lt;/a&gt; 的 &lt;code class=&quot;highlighter-rouge&quot;&gt;font&lt;/code&gt; CSS，调整了字号，适配了 Win 的渣渲染，中英文混排效果好多了。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;指数位&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;数字位&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;01111111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000…0000&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
 
-&lt;h2 id=&quot;section-2&quot;&gt;后记&lt;/h2&gt;
+&lt;p&gt;而满足上述定义的数只能是在数字位加1的数,即&lt;/p&gt;
 
-&lt;p&gt;回顾这个博客的诞生，纯粹是出于个人兴趣。在知乎相关问题上回答并获得一定的 star 后，我决定把这个博客主题当作一个小小的开源项目来维护。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;指数位&lt;/th&gt;
+      &lt;th style=&quot;text-align: center&quot;&gt;数字位&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;01111111&lt;/td&gt;
+      &lt;td style=&quot;text-align: center&quot;&gt;000…000&lt;strong&gt;1&lt;/strong&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
 
-&lt;p&gt;在经历 v1.0 - v1.5 的蜕变后，这个博客主题愈发完整，不但增加了诸多 UI 层的优化（opinionated）；在代码层面，更加丰富的配置项也使得这个主题拥有了更好的灵活性与可拓展性。而作为一个开源项目，我也积极的为其完善文档与解决 issue。&lt;/p&gt;
+&lt;p&gt;表示出来即2&lt;sup&gt;-23&lt;/sup&gt; = 1.19092896-e7.&lt;/p&gt;
 
-&lt;p&gt;如果你恰好逛到了这里，希望你也能喜欢这个博客主题。&lt;/p&gt;
+&lt;p&gt;另外，2&lt;sup&gt;-23&lt;/sup&gt; 也代表了浮点数类型能够精确表示的最小一位数，我想把这个值作为浮点数的精度也有这方面的考虑。&lt;/p&gt;
 
-&lt;p&gt;—— Hux 后记于 2015.10&lt;/p&gt;
+&lt;h2 id=&quot;section-4&quot;&gt;浮点数的比较&lt;/h2&gt;
+
+&lt;p&gt;首先明确一点，所有浮点数的比较都是通过逐一对比比特的方式进行。&lt;/p&gt;
+
+&lt;p&gt;因此，两个比特位完全一致，用&lt;code class=&quot;highlighter-rouge&quot;&gt;==&lt;/code&gt;判断完全可行。
+如&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float a = 0.5;
+float b = 0.5;
+if (a == b)
+{
+	printf(&quot;isEqual&quot;);\\does executed
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用&lt;code class=&quot;highlighter-rouge&quot;&gt;==&lt;/code&gt;,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float y = 1000000.3;
+float x = 0.3;
+float k = 1000000;
+float z = y-k-x;
+if (fabsf(z) &amp;lt; FLT_EPSILON) {
+   NSLog(@&quot;Z &amp;lt; FLT_EPSILON&quot;);
+}
+z = y-x-k;
+if (fabsf(z) &amp;lt; FLT_EPSILON) {
+    NSLog(@&quot;Z &amp;lt; FLT_EPSILON&quot;); \\only this executed
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;直觉上执行&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k-x&lt;/code&gt;也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k-x &amp;gt;= FLT_EPSILON&lt;/code&gt;是因为&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k&lt;/code&gt;都是数字较大，指数位较高，在运算过程中实施阶数对其操作的时候舍掉了小数位后0.3的精度，因此，计算出的z值实际是0.01+多。&lt;/p&gt;
+
+&lt;p&gt;因此，&lt;strong&gt;对于浮点数，比较大小永远是一个伪命题&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;对精度要求不高的地方用一用无妨，关键数据一定要用整数类型.&lt;/p&gt;
+
+&lt;h2 id=&quot;denormalized-float&quot;&gt;非规格化浮点数（Denormalized float）&lt;/h2&gt;
+
+&lt;p&gt;对于问题4,相信很多同学会认为+/-0 计算量较小，对运算速度影响小，然而实际测试结果却不是。导致低一段代码性能低的原因为，不断地 y*x/z产生了非规格化浮点数， 而在+/-0的情况下，之后的运算都是Denormalized float之间的运算&lt;/p&gt;
+
+&lt;p&gt;而第二段代码+/- 0.1 实际上提升了运算阶数，使得运算的数值不是Denormalized float.&lt;/p&gt;
+
+&lt;p&gt;github 上有个问答http://stackoverflow.com/questions/9314534/why-does-changing-0-1f-to-0-slow-down-performance-by-10x 有人测试过，使用第一段代码性能比第而段代码&lt;strong&gt;慢十倍&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;链接中大牛们的回答正是这个问题的答案，这都是由于CPU对非规格化浮点数的支持导致的。&lt;/p&gt;
+
+&lt;p&gt;一般的浮点数，默认数字位从小数点后第一位开始，小数点前一位为1.&lt;/p&gt;
+
+&lt;p&gt;而非规格化浮点数为了增加对更小的数字的支持，打破了小数点前一位为1的限制，即将浮点数的表示范围增加了23位（二进制下）。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-5&quot;&gt;结语&lt;/h2&gt;
+
+&lt;p&gt;关于浮点数的那些事到这结束啦，欢迎大家一起讨论~&lt;/p&gt;
 
 </description>
-        <pubDate>Thu, 29 Jan 2015 20:00:00 +0800</pubDate>
-        <link>/2015/01/29/hello-2015/</link>
-        <guid isPermaLink="true">/2015/01/29/hello-2015/</guid>
+        <pubDate>Fri, 21 Oct 2016 05:00:00 +0800</pubDate>
+        <link>/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</link>
+        <guid isPermaLink="true">/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</guid>
         
-        <category>生活</category>
+        <category>技术</category>
+        
+        <category>计算机基础</category>
         
         
       </item>

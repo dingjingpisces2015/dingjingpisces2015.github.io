@@ -10,9 +10,9 @@
     <meta name="keywords"  content="dingjingpisces2015">
     <link rel="shortcut icon" href="/img/favicon.ico">
 
-    <title>Hello 2015 - D Tech Blog</title>
+    <title>有关浮点数的那些事 - D Tech Blog</title>
 
-    <link rel="canonical" href="/2015/01/29/hello-2015/">
+    <link rel="canonical" href="/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/css/bootstrap.min.css">
@@ -159,15 +159,17 @@
                 <div class="post-heading">
                     <div class="tags">
                         
-                        <a class="tag" href="/tags/#生活" title="生活">生活</a>
+                        <a class="tag" href="/tags/#技术" title="技术">技术</a>
+                        
+                        <a class="tag" href="/tags/#计算机基础" title="计算机基础">计算机基础</a>
                         
                     </div>
-                    <h1>Hello 2015</h1>
+                    <h1>有关浮点数的那些事</h1>
                     
                     
-                    <h2 class="subheading"> "Hello World, Hello Blog"</h2>
+                    <h2 class="subheading">几个小问题</h2>
                     
-                    <span class="meta">Posted by Hux on January 29, 2015</span>
+                    <span class="meta">Posted by dingjingpisces on October 21, 2016</span>
                 </div>
             </div>
         </div>
@@ -185,72 +187,314 @@
                 col-md-10 col-md-offset-1
                 post-container">
 
-				<blockquote>
-  <p>“Yeah It’s on. ”</p>
-</blockquote>
+				<h1 id="section">有关浮点数的那些事</h1>
 
-<h2 id="section">前言</h2>
+<h2 id="section-1">几个小问题</h2>
 
-<p>Hux 的 Blog 就这么开通了。</p>
+<ol>
+  <li>浮点数可以准确表示0吗？</li>
+  <li>浮点数精度为什么是1.19092896-e7</li>
+  <li>浮点数是否可以判等？</li>
+  <li>下面两段代码的运行速度如何</li>
+</ol>
 
-<p><a href="#build">跳过废话，直接看技术实现 </a></p>
+<div class="highlighter-rouge"><pre class="highlight"><code>   const float x = 1.1;
+   const float z = 1.111;
+   float y = x;
+   for(int j = 0; j &lt; 10000000; j++)
+   {
+       y *= x;
+       y /= z;
+       y += 0;
+       y -= 0;
+   }
+   return 0;
+</code></pre>
+</div>
 
-<p>2015 年，Hux 总算有个地方可以好好写点东西了。</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>   const float x = 1.1;
+   const float z = 1.111;
+   float y = x;
+   for(int j = 0; j &lt; 10000000; j++)
+   {
+       y *= x;
+       y /= z;
+       y += 0.1;
+       y -= 0.1;
+   }
+</code></pre>
+</div>
+<p>本文会从浮点数的表示方法入手回答一下上面的几个问题。</p>
 
-<p>作为一个程序员， Blog 这种轮子要是挂在大众博客程序上就太没意思了。一是觉得大部分 Blog 服务都太丑，二是觉得不能随便定制不好玩。之前因为太懒没有折腾，结果就一直连个写 Blog 的地儿都没有。</p>
+<h2 id="section-2">浮点数的表示方法</h2>
 
-<p>在玩了一段时间知乎之后，答题的快感又激起了我开博客的冲动。之前的<a href="http://huangxuan.me/portfolio">个人网站</a>是作品集形式的（现在集成进来了），并不适合用来写博文，一不做二不休，花一天搞一个吧！</p>
+<p>IEEE-754对浮点数的定义如下</p>
 
-<p id="build"></p>
-<hr />
-
-<h2 id="section-1">正文</h2>
-
-<p>接下来说说搭建这个博客的技术细节。</p>
-
-<p>正好之前就有关注过 <a href="https://pages.github.com/">GitHub Pages</a> + <a href="http://jekyllrb.com/">Jekyll</a> 快速 Building Blog 的技术方案，非常轻松时尚。</p>
-
-<p>其优点非常明显：</p>
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">Type</th>
+      <th style="text-align: center">Sign</th>
+      <th style="text-align: center">Actual Exponent</th>
+      <th style="text-align: center">Exp (biased)</th>
+      <th style="text-align: center">Exponent field</th>
+      <th style="text-align: center">Significand (fraction field)</th>
+      <th style="text-align: center">Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center">Zero</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">−127</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">0.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Negative zero</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">−127</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">−0.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">One</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">127</td>
+      <td style="text-align: center">0111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">1.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Minus One</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">127</td>
+      <td style="text-align: center">0111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">−1.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Smallest denormalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0001</td>
+      <td style="text-align: center">±2−23 × 2−126 = ±2−149 ≈ ±1.4×10−45</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">“Middle” denormalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">100 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">±2−1 × 2−126 = ±2−127 ≈ ±5.88×10−39</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Largest denormalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">111 1111 1111 1111 1111 1111</td>
+      <td style="text-align: center">±(1−2−23) × 2−126 ≈ ±1.18×10−38</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Smallest normalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">0000 0001</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">±2−126 ≈ ±1.18×10−38</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Largest normalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">127</td>
+      <td style="text-align: center">254</td>
+      <td style="text-align: center">1111 1110</td>
+      <td style="text-align: center">111 1111 1111 1111 1111 1111</td>
+      <td style="text-align: center">±(2−2−23) × 2127 ≈ ±3.4×1038</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Positive infinity</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">128</td>
+      <td style="text-align: center">255</td>
+      <td style="text-align: center">1111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">+∞</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Negative infinity</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">128</td>
+      <td style="text-align: center">255</td>
+      <td style="text-align: center">1111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">−∞</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Not a number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">128</td>
+      <td style="text-align: center">255</td>
+      <td style="text-align: center">1111 1111</td>
+      <td style="text-align: center">non zero</td>
+      <td style="text-align: center">NaN</td>
+    </tr>
+  </tbody>
+</table>
 
 <ul>
-  <li><strong>Markdown</strong> 带来的优雅写作体验</li>
-  <li>非常熟悉的 Git workflow ，<strong>Git Commit 即 Blog Post</strong></li>
-  <li>利用 GitHub Pages 的域名和免费无限空间，不用自己折腾主机
-    <ul>
-      <li>如果需要自定义域名，也只需要简单改改 DNS 加个 CNAME 就好了</li>
-    </ul>
-  </li>
-  <li>Jekyll 的自定制非常容易，基本就是个模版引擎</li>
+  <li>Sign bit can be either 0 or 1 .</li>
 </ul>
 
-<p>本来觉得最大的缺点可能是 GitHub 在国内访问起来太慢，所以第二天一起床就到 GitCafe(Chinese GitHub Copy，现在被 Coding 收购了) 迁移了一个<a href="http://huxpro.coding.me">镜像</a>出来，结果还是巨慢。</p>
+<p>从上述定义中可以回答第一个问题：<strong>浮点数可以精确表示0</strong>，用代码验证即</p>
 
-<p>哥哥可是个前端好嘛！ 果断开 Chrome DevTool 查了下网络请求，原来是 <strong>pending 在了 Google Fonts</strong> 上，页面渲染一直被阻塞到请求超时为止，难怪这么慢。<br />
-忍痛割爱，只好把 Web Fonts 去了（反正超时看到的也只能是 fallback ），果然一下就正常了，而且 GitHub 和 GitCafe 对比并没有感受到明显的速度差异，虽然 github 的 ping 值明显要高一些，达到了 300ms，于是用 DNSPOD 优化了一下速度。</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>float zero1 = 0.0;
+float zero2 = 0.0;
+if (zero1 == zero2) 
+{
+	printf(@"zero1 = zero2"); //must setup in if block
+}
+</code></pre>
+</div>
 
-<hr />
+<p>总结<strong>浮点数定义的规律</strong>如下：</p>
 
-<p>配置的过程中也没遇到什么坑，基本就是 Git 的流程，相当顺手</p>
+<ul>
+  <li>指数位为00000000时，
+    <ol>
+      <li>数字位为全0时，若符号位为0，则表示正零0.0 ；若符号位为1时，表示负零-0.0</li>
+      <li>数字位不全为零，表示非标浮点数(denormalized number)，此时默认第一位不是1，而是0（标准浮点数为了更大限度的表示数字，认为数字位都是小数点之后的数，并且默认小数点前一位为1）</li>
+    </ol>
+  </li>
+  <li>指数位为11111111时，
+    <ol>
+      <li>数字为全为0时，若符号位为0 ，则表示正无穷，若符号位为1，则表示负无穷</li>
+      <li>数字为补全为0，表示这不是一个数NaN</li>
+    </ol>
+  </li>
+  <li>因此指数位范围为00000001~11111110 （1~254）
+    <ol>
+      <li>而为了表示小数部分，指数部分需要减127，因此，指数实际范围为-126~127，标准浮点数指数能表示的范围也就是 2^-126 ~2^127</li>
+    </ol>
+  </li>
+</ul>
 
-<p>大的 Jekyll 主题上直接 fork 了 Clean Blog（这个主题也相当有名，就不多赘述了。唯一的缺点大概就是没有标签支持，于是我给它补上了。）</p>
+<h2 id="section-3">浮点数的精度</h2>
 
-<p>本地调试环境需要 <code class="highlighter-rouge">gem install jekyll</code>，结果 rubygem 的源居然被墙了……后来手动改成了我大淘宝的镜像源才成功</p>
+<p>浮点数的精度宏FLT_EPSILON = 1.19092896-e7。
+IEEE对FLT_EPSILON的定义为</p>
 
-<p>Theme 的 CSS 是基于 Bootstrap 定制的，看得不爽的地方直接在 Less 里改就好了（平时更习惯 SCSS 些），<strong>不过其实我一直觉得 Bootstrap 在移动端的体验做得相当一般，比我在淘宝参与的团队 CSS 框架差多了……</strong>所以为了体验，也补了不少 CSS 进去</p>
+<div class="highlighter-rouge"><pre class="highlight"><code>FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
+</code></pre>
+</div>
 
-<p>最后就进入了耗时反而最长的<strong>做图、写字</strong>阶段，也算是进入了<strong>写博客</strong>的正轨，因为是类似 Hack Day 的方式去搭这个站的，所以折腾折腾着大半夜就过去了。</p>
+<p>再回到上一章看浮点数，1.0 = 指数位和数字为都为0的数，即</p>
 
-<p>第二天考虑中文字体的渲染，fork 了 <a href="http://www.typeisbeautiful.com/">Type is Beautiful</a> 的 <code class="highlighter-rouge">font</code> CSS，调整了字号，适配了 Win 的渣渲染，中英文混排效果好多了。</p>
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">指数位</th>
+      <th style="text-align: center">数字位</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center">01111111</td>
+      <td style="text-align: center">000…0000</td>
+    </tr>
+  </tbody>
+</table>
 
-<h2 id="section-2">后记</h2>
+<p>而满足上述定义的数只能是在数字位加1的数,即</p>
 
-<p>回顾这个博客的诞生，纯粹是出于个人兴趣。在知乎相关问题上回答并获得一定的 star 后，我决定把这个博客主题当作一个小小的开源项目来维护。</p>
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">指数位</th>
+      <th style="text-align: center">数字位</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center">01111111</td>
+      <td style="text-align: center">000…000<strong>1</strong></td>
+    </tr>
+  </tbody>
+</table>
 
-<p>在经历 v1.0 - v1.5 的蜕变后，这个博客主题愈发完整，不但增加了诸多 UI 层的优化（opinionated）；在代码层面，更加丰富的配置项也使得这个主题拥有了更好的灵活性与可拓展性。而作为一个开源项目，我也积极的为其完善文档与解决 issue。</p>
+<p>表示出来即2<sup>-23</sup> = 1.19092896-e7.</p>
 
-<p>如果你恰好逛到了这里，希望你也能喜欢这个博客主题。</p>
+<p>另外，2<sup>-23</sup> 也代表了浮点数类型能够精确表示的最小一位数，我想把这个值作为浮点数的精度也有这方面的考虑。</p>
 
-<p>—— Hux 后记于 2015.10</p>
+<h2 id="section-4">浮点数的比较</h2>
+
+<p>首先明确一点，所有浮点数的比较都是通过逐一对比比特的方式进行。</p>
+
+<p>因此，两个比特位完全一致，用<code class="highlighter-rouge">==</code>判断完全可行。
+如</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>float a = 0.5;
+float b = 0.5;
+if (a == b)
+{
+	printf("isEqual");\\does executed
+}
+</code></pre>
+</div>
+
+<p>然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用<code class="highlighter-rouge">==</code>,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>float y = 1000000.3;
+float x = 0.3;
+float k = 1000000;
+float z = y-k-x;
+if (fabsf(z) &lt; FLT_EPSILON) {
+   NSLog(@"Z &lt; FLT_EPSILON");
+}
+z = y-x-k;
+if (fabsf(z) &lt; FLT_EPSILON) {
+    NSLog(@"Z &lt; FLT_EPSILON"); \\only this executed
+}
+</code></pre>
+</div>
+
+<p>直觉上执行<code class="highlighter-rouge">y-k-x</code>也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。</p>
+
+<p><code class="highlighter-rouge">y-k-x &gt;= FLT_EPSILON</code>是因为<code class="highlighter-rouge">y-k</code>都是数字较大，指数位较高，在运算过程中实施阶数对其操作的时候舍掉了小数位后0.3的精度，因此，计算出的z值实际是0.01+多。</p>
+
+<p>因此，<strong>对于浮点数，比较大小永远是一个伪命题</strong>。</p>
+
+<p>对精度要求不高的地方用一用无妨，关键数据一定要用整数类型.</p>
+
+<h2 id="denormalized-float">非规格化浮点数（Denormalized float）</h2>
+
+<p>对于问题4,相信很多同学会认为+/-0 计算量较小，对运算速度影响小，然而实际测试结果却不是。导致低一段代码性能低的原因为，不断地 y*x/z产生了非规格化浮点数， 而在+/-0的情况下，之后的运算都是Denormalized float之间的运算</p>
+
+<p>而第二段代码+/- 0.1 实际上提升了运算阶数，使得运算的数值不是Denormalized float.</p>
+
+<p>github 上有个问答http://stackoverflow.com/questions/9314534/why-does-changing-0-1f-to-0-slow-down-performance-by-10x 有人测试过，使用第一段代码性能比第而段代码<strong>慢十倍</strong>。</p>
+
+<p>链接中大牛们的回答正是这个问题的答案，这都是由于CPU对非规格化浮点数的支持导致的。</p>
+
+<p>一般的浮点数，默认数字位从小数点后第一位开始，小数点前一位为1.</p>
+
+<p>而非规格化浮点数为了增加对更小的数字的支持，打破了小数点前一位为1的限制，即将浮点数的表示范围增加了23位（二进制下）。</p>
+
+<h2 id="section-5">结语</h2>
+
+<p>关于浮点数的那些事到这结束啦，欢迎大家一起讨论~</p>
 
 
 
@@ -261,21 +505,19 @@
                 </style>
                 <div class="ds-share"
                     style="text-align: right"
-                    data-thread-key="/2015/01/29/hello-2015"
-                    data-title="Hello 2015"
-                    data-url="/2015/01/29/hello-2015/"
+                    data-thread-key="/2016/10/21/有关浮点数的那些事"
+                    data-title="有关浮点数的那些事"
+                    data-url="/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/"
                     data-images="/img/post-bg-2015.jpg"
-                    data-content="
-  “Yeah It’s on. ”
+                    data-content="有关浮点数的那些事
+
+几个小问题
 
 
-前言
-
-Hux 的 Blog 就这么开通了。
-
-跳过废话，直接看技术实现 
-
-2015 年，Hux 总算有个地... | D Tech Blog " >
+  浮点数可以准确表示0吗？
+  浮点数精度为什么是1.19092896-e7
+  浮点数是否可以判等？
+  下面两... | D Tech Blog " >
                     <div class="ds-share-inline">
                       <ul  class="ds-share-icons-16">
                         <li data-toggle="ds-share-icons-more"><a class="ds-more" href="#">分享到：</a></li>
@@ -302,9 +544,9 @@ Hux 的 Blog 就这么开通了。
                 <!-- 多说评论框 start -->
                 <div class="comment">
                     <div class="ds-thread"
-                        data-thread-key="/2015/01/29/hello-2015"
-                        data-title="Hello 2015"
-                        data-url="/2015/01/29/hello-2015/" >
+                        data-thread-key="/2016/10/21/有关浮点数的那些事"
+                        data-title="有关浮点数的那些事"
+                        data-url="/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/" >
                     </div>
                 </div>
                 <!-- 多说评论框 end -->
@@ -343,6 +585,8 @@ Hux 的 Blog 就这么开通了。
                     <hr class="hidden-sm hidden-xs">
                     <h5><a href="/tags/">FEATURED TAGS</a></h5>
                     <div class="tags">
+        				
+                            
         				
                             
         				
