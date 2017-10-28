@@ -147,6 +147,7 @@ typedef struct SyncData {
 从上述加解锁的过程可以看出，synchronized是通过传入的obj获取到对应的SyncData，最终对SyncData中的递归锁进行操作，实现了同步。从obj到SyncData的转化就要看id2data的实现了。
 
 ## id2data-找到对象对应的锁
+
 代码如下
 
 ```
@@ -324,7 +325,7 @@ static SyncData* id2data(id object, enum usage why)
 
 
 ## 总结
-从上面的同步过程可以看到s**ynchronized加锁本质是递归锁，SyncData这个结构将对象和递归锁绑定，*StripedMap<T>*这个全局结构维护了所有锁，尽管为了提高性能苹果大量的使用了TLS缓存，但比起直接用互斥锁或者递归锁进行加锁，对每个新对象都需要锁住StripedMap<T>的某条line,引入了一道加锁，同时还可能引起锁竞争，因此性能会比直接用锁差**
+从上面的同步过程可以看到**synchronized加锁本质是递归锁，SyncData这个结构将对象和递归锁绑定，*StripedMap<T>*这个全局结构维护了所有锁，尽管为了提高性能苹果大量的使用了TLS缓存，但比起直接用互斥锁或者递归锁进行加锁，对每个新对象都需要锁住StripedMap<T>的某条line,引入了一道加锁，同时还可能引起锁竞争，因此性能会比直接用锁差**
 但比较明显的好处是不需要显式维护锁对象，代码阅读上清爽了不少。
 
 
