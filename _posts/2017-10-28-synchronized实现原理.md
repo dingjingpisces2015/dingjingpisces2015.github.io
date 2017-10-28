@@ -16,7 +16,7 @@ tags:
 # @synchronized实现原理
 在iOS面试中，常常会问到锁的性能问题，对于@synchronized方式加锁,会的到认可的回答是，synchronized性能比较差，不建议使用。这个结论往往是通过测试得到，最近看了synchronized的runtime实现，希望从源码的角度分析为什么慢。
 
-先给出结论：@synchronized持有的锁本质是递归锁，由于开发者使用@synchronized的时候不持有声明锁，这锁其实是由系统持有并维护的，锁的存取会耗费额外的时间。
+先给出结论：**@synchronized持有的锁本质是递归锁，由于开发者使用@synchronized的时候不持有声明锁，这锁其实是由系统持有并维护的，锁的存取会耗费额外的时间。**
 
 ## @synchronized与runtime
 先通过clang的-rewrite-objc将带有synchronized的的OC代码转换成C,OC代码如下
@@ -320,11 +320,11 @@ static SyncData* id2data(id object, enum usage why)
 ```
 
 
-可以看到所有的同步对象都由 StripedMap<T> 这个类进行管理，StripedMap<T>是objective -C runtime中定义的一种底层结构，实现了一种类似斑马线的结构，一共分了8条线，每个对象根据自己的内存地址被映射到不同的线上，每条线由一个锁控制，这么做的目的是尽可能的减少锁竞争（先挖个坑，之后会补充一篇StripedMap<T>的blog）
+可以看到所有的同步对象都由 *StripedMap<T>* 这个类进行管理，*StripedMap<T>*是objective -C runtime中定义的一种底层结构，实现了一种类似斑马线的结构，一共分了8条线，每个对象根据自己的内存地址被映射到不同的线上，每条线由一个锁控制，这么做的目的是尽可能的减少锁竞争（先挖个坑，之后会补充一篇StripedMap<T>的blog）
 
 
 ## 总结
-从上面的同步过程可以看到synchronized加锁本质是递归锁，SyncData这个结构将对象和递归锁绑定，StripedMap<T>这个全局结构维护了所有锁，尽管为了提高性能苹果大量的使用了TLS缓存，但比起直接用互斥锁或者递归锁进行加锁，对每个新对象都需要锁住StripedMap<T>的某条line,引入了一道加锁，同时还可能引起锁竞争，因此性能会比直接用锁差。
+从上面的同步过程可以看到s**ynchronized加锁本质是递归锁，SyncData这个结构将对象和递归锁绑定，*StripedMap<T>*这个全局结构维护了所有锁，尽管为了提高性能苹果大量的使用了TLS缓存，但比起直接用互斥锁或者递归锁进行加锁，对每个新对象都需要锁住StripedMap<T>的某条line,引入了一道加锁，同时还可能引起锁竞争，因此性能会比直接用锁差**
 但比较明显的好处是不需要显式维护锁对象，代码阅读上清爽了不少。
 
 
