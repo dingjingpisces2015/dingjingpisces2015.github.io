@@ -15,13 +15,10 @@ tags:
 # Objective-C内存模型分析
 
 ## 简介
----
 
 在iOS开发中，我们知道iOS对象可以在运行时被操作，执行动态查找/执行方法等操作。通过阅读runtime源码，很容易将objc_class和Class联系在一起，认为一个类的存储结构是和objc_class一致。但是编译器如何将Objective-c的类编译成objc_class结构，objc_class中如method_list结构中存储的OC方法如何获取到函数地址，成员变量内存地址如何偏移等问题一直像一团迷雾一样阻隔在OC对象和其runtime结构之间，本文希望通过clang的rewrite-objc揭开这层神秘的面纱，加深对运行时机制的理解。
 
 ## 几个一直困扰的问题
-
----
 
 下面是在研究Objective-C内存模型过程中一直思考和希望解决的问题，在文章的中会一一给出解答。
 
@@ -199,12 +196,99 @@ struct objc_class : objc_object {
     mask_t _mask;
     mask_t _occupied;
 ``` 即cache可以对应buckets的指针，而mask_t结构为指针的一半，两个mask_t正好对应了vtable的指针位置
-- 最后ro 就对应了 class_data_bits_t结构中的指针
+- 最后ro 就对应了 class_data_bits_t（bits）结构中的指针
 
-对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$_Test结构。
+对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$_Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO_$_Test结构在```class_rw_t *data() { 
+        return bits.data();
+    } ```方法中返回，而bits.data()方法的返回值为bits&FAST_DATA_MASK （这个FAST_DATA_MASK  ```#define FAST_DATA_MASK          0x00007ffffffffff8UL``` 从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与```taggedPoint```区分，前面为何是0还是不能理解）
+    
+Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下
+```
+struct class_rw_t {
+    // Be warned that Symbolication knows the layout of this structure.
+    uint32_t flags;
+    uint32_t version;
 
+    const class_ro_t *ro;
 
+    method_array_t methods;
+    property_array_t properties;
+    protocol_array_t protocols;
 
+    Class firstSubclass;
+    Class nextSiblingClass;
+
+    char *demangledName;
+   	//method list 
+   }
+```
+拿class_rw_t和_class_ro_t（rewrite后的结构）进行对比，可以发现这两个结构的成员变量偏移一致，**至此，Objective-c编译后生成的结构已经完全和runtime中的对应了，这也就意味着通过runtime中的结构查找对应偏移理论上是可以取到编译后结构的值，这是问题2，4的解答，但这也就引出了另一个问题,即问题3，运行时如何将编译时生成的数据和运行时方法联系起来。**
+
+## 运行时类加载
+
+通过仔细阅读runtime源码，发现了__read_images方法，为了更清晰的表述，下面提取出了__read_images中读取类结构数据的部分代码
+
+```
+void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
+{
+
+//...
+   for (EACH_HEADER) {//这里面的EACH_HEADER不知道是啥
+        if (! mustReadClasses(hi)) {
+            // Image is sufficiently optimized that we need not call readClass()
+            continue;
+        }
+
+        bool headerIsBundle = hi->isBundle();
+        bool headerIsPreoptimized = hi->isPreoptimized();
+
+        classref_t *classlist = _getObjc2ClassList(hi, &count); //这里读入了类中的数据信息
+        for (i = 0; i < count; i++) {
+            Class cls = (Class)classlist[i];
+            Class newCls = readClass(cls, headerIsBundle, headerIsPreoptimized);
+
+            if (newCls != cls  &&  newCls) {
+                // Class was moved but not deleted. Currently this occurs 
+                // only when the new class resolved a future class.
+                // Non-lazily realize the class below.
+                resolvedFutureClasses = (Class *)
+                    realloc(resolvedFutureClasses, 
+                            (resolvedFutureClassCount+1) * sizeof(Class));
+                resolvedFutureClasses[resolvedFutureClassCount++] = newCls;
+            }
+        }
+    }
+
+//...
+}
+```
+
+读入类数据的代码为```_getObjc2ClassList ```,跳到定义可以看到
+
+```
+
+GETSECT(_getObjc2ClassList,           classref_t,      "__objc_classlist");
+//等价于
+type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) { 
+ return getDataSection<classref_t>(mhdr, __objc_classlist, nil, outCount); 
+}
+
+```
+可以看到```_getObjc2ClassList ```读了数据段中的__objc_classlist,
+在rewrite后的cpp中搜索__objc_classlist可以看到
+
+```
+static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section ("__DATA, __objc_classlist,regular,no_dead_strip")))= {
+	&OBJC_CLASS_$_Test,
+};
+```
+
+**这里将OC中的类指针依次放入该结构中，而read_images代码根据传入的指针，调用readClass方法根据struct中的变量值依次初始化了objc_class中的数据，并将类写入结构为NXMapTable的静态变量。实现了将静态的结构体读入全局变量的目的，这也正是整个运行时的基础。**
+
+最后关于为啥category不能添加成员变量，我的理解是struct结构中的成员变量经过编译器编译，相对偏移地址已经固定了，动态添加到末尾会破坏整个内存结构的读取，因此只能通过另外一个全局结构（associationMap？），来管理与对象关联的额外变量。
+
+## 最后
+阅读运行时源码对底层知识好像可以有更多的理解，但仍有挺多东西不理解的，欢迎讨论吧。
 
 
 
