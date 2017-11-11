@@ -1,0 +1,223 @@
+<h1 id="pincache源码阅读">PINCache源码阅读</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p><em>PINCache</em> <a href="https://github.com/pinterest/PINCache.git">https://github.com/pinterest/PINCache.git</a></p>
+
+<p><strong>PINCache</strong>是对<strong>TMCache</strong>的一个fork,主要修复了其中的线程安全问题。
+在阅读源码的过程中，发现PINCache使用了键值存取技术，并且自己维护了一组多线程并发，下面会从这两个方面分析源码，最后介绍PINCache暴露出的主接口。</p>
+
+<h2 id="下标存取ojbect-subscriping">下标存取（Ojbect subscriping）</h2>
+
+<p>在开发过程中我们常常会写出下面的代码：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>NSArray *array = @[1,2,3];
+NSNubmer *one = array[1]; // 1
+
+NSDictioanry *friend = @{@"li":@"han", @"zhang":@"xiao"};
+NSString *li = name[@"li"] //@"han"
+</code></pre></div></div>
+<p>对NSArray, NSDictionary的对象使用了<code class="highlighter-rouge">[]</code>直接存取，这种存取方式就叫做<strong>Object Subscriping</strong>.</p>
+
+<p>Clang6支持两类subscripting访问， array-style(整数访问) ,dictionary-style（对象访问），当使用下标访问时，会调用对应的方法，一个类可以同时支持整数/对象下标访问。</p>
+
+<p>整数下标访问需要声明并实现 整数访问支持全部正负整数</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectAtIndexedSubscript:(NSInteger)number
+- (void)setObject:(id)object atIndexedSubscript:(NSInteger)number  
+</code></pre></div></div>
+
+<p>字典下标访问对应</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectForKeyedSubscript:(id)subscript
+- (void)setObject::(id)object forKeyedSubscript:(id)subscript 
+</code></pre></div></div>
+
+<p><strong>PINCache</strong>定义了PINCacheObjectSubscripting协议(声明了字典下标访问接口)，通过让PINCache/PINMemoryCache/PINDiskCache服从并实现该协议实现了下标访问。</p>
+
+<h2 id="多线程处理">多线程处理</h2>
+
+<p>为了更高效的存取数据，PINCache提供了异步访问接口，并维护了一套线程处理类。</p>
+
+<h3 id="pinoperationqueue">PINOperationQueue</h3>
+<p>实现了一个类似于系统队列的类，顺序处理放进去的操作
+保证在不设置并行变量的情况下，顺序执行，否则并行执行。
+主要操作有:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
+
+- (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)block withPriority:(PINOperationQueuePriority)priority
+{
+  PINOperation *operation = [PINOperation operationWithBlock:^(id data) { block(); } //根据传入的block生成一个operation对象（包含动作本身，优先级，reference
+                                                   reference:[self nextOperationReference]
+                                                    priority:priority
+                                                  identifier:nil
+                                                        data:nil
+                                                  completion:nil];
+  [self lock];
+    [self locked_addOperation:operation]; //把这个操作添加到全局操作队列和对应优先级的队列中
+  [self unlock];
+  
+  [self scheduleNextOperations:NO]; //执行操作，具体如下
+  
+  return operation.reference;
+}
+）
+
+- (void)scheduleNextOperations:(BOOL)onlyCheckSerial
+{
+  [self lock];
+  
+    //get next available operation in order, ignoring priority and run it on the serial queue
+    if (_serialQueueBusy == NO) {
+      PINOperation *operation = [self locked_nextOperationByQueue]; //在_queuedOperations队列中取出第一个operation，并从_queuedOperations队列及优先级队列移除该操作
+      if (operation) {
+        _serialQueueBusy = YES; //标志正在往串行queue中放入任务
+        dispatch_async(_serialQueue, ^{
+          operation.block(operation.data); //执行传入的block
+          for (dispatch_block_t completion in operation.completions) {
+            completion();
+          }
+          dispatch_group_leave(_group);
+          
+          [self lock];
+            _serialQueueBusy = NO;
+          [self unlock];
+          
+          //see if there are any other operations
+          [self scheduleNextOperations:YES]; // 继续取出所有在_queuedOperations中的任务（感觉并没有必要，因为毕竟一次只能放入一个任务啊）
+        });
+      }
+    }
+  
+  NSInteger maxConcurrentOperations = _maxConcurrentOperations;
+  
+  [self unlock];
+  
+  if (onlyCheckSerial) {
+    return;
+  }
+
+  //if only one concurrent operation is set, let's just use the serial queue for executing it
+  if (maxConcurrentOperations &lt; 2) { //看看是不是允许并发执行，
+    return;
+  }
+  //当前一个任务还没执行完，又放入了新任务时，允许并发执行
+  dispatch_async(_semaphoreQueue, ^{
+    dispatch_semaphore_wait(_concurrentSemaphore, DISPATCH_TIME_FOREVER);//并发任务数由_concurrentSemaphore决定
+    [self lock]; //防止一个operation被多次取出
+      PINOperation *operation = [self locked_nextOperationByPriority]; //按优先级取出优先级最高的任务
+    [self unlock];
+  
+    if (operation) {
+      dispatch_async(_concurrentQueue, ^{
+        operation.block(operation.data);
+        for (dispatch_block_t completion in operation.completions) {
+          completion();
+        }
+        dispatch_group_leave(_group);
+        dispatch_semaphore_signal(_concurrentSemaphore);
+      });
+    } else {
+      dispatch_semaphore_signal(_concurrentSemaphore);
+    }
+  });
+}
+
+</code></pre></div></div>
+
+<h3 id="pinoperationgroup">PINOperationGroup</h3>
+
+<p>支持addOperation添加操作进Group,并start,执行所有block,如果有completion回调时，会在所有任务执行完之后回调该函数。
+这个类看起来和系统提供的group没有太大区别，不太清楚为什么要自己定制。</p>
+
+<h2 id="缓存类">缓存类</h2>
+
+<p>缓存类有PINCache/PINMemoryCache/PINDiskCache 并无继承关系</p>
+
+<h3 id="pincache">PINCache</h3>
+
+<p>PINCache中包含了PINMemoryCache，PINDiskCache，执行将内存缓存异步同步到硬盘缓存的操作，如下</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步读取
+- (void)objectForKeyAsync:(NSString *)key completion:(PINCacheObjectBlock)block
+{
+    if (!key || !block)
+        return;
+    
+    __weak PINCache *weakSelf = self;
+    
+    [self.operationQueue addOperation:^{
+        PINCache *strongSelf = weakSelf;
+        if (!strongSelf)
+            return;
+        [strongSelf-&gt;_memoryCache objectForKeyAsync:key completion:^(PINMemoryCache *memoryCache, NSString *memoryCacheKey, id memoryCacheObject) {//优先查找内存缓存
+            PINCache *strongSelf = weakSelf;
+            if (!strongSelf)
+                return;
+            
+            if (memoryCacheObject) {
+                // Update file modification date. TODO: make this a separate method?
+                [strongSelf-&gt;_diskCache fileURLForKeyAsync:memoryCacheKey completion:^(NSString * _Nonnull key, NSURL * _Nullable fileURL) {}];//如果存在内存缓存，更新下问价缓存的访问时间
+                [strongSelf-&gt;_operationQueue addOperation:^{
+                    PINCache *strongSelf = weakSelf;
+                    if (strongSelf)
+                        block(strongSelf, memoryCacheKey, memoryCacheObject);
+                }];
+            } else {
+                [strongSelf-&gt;_diskCache objectForKeyAsync:memoryCacheKey completion:^(PINDiskCache *diskCache, NSString *diskCacheKey, id &lt;NSCoding&gt; diskCacheObject) {//不存在硬盘缓存，从硬盘缓存中读取，
+                    PINCache *strongSelf = weakSelf;
+                    if (!strongSelf)
+                        return;
+                    
+                    [strongSelf-&gt;_memoryCache setObjectAsync:diskCacheObject forKey:diskCacheKey completion:nil]; //更细内存缓存
+                    
+                    [strongSelf-&gt;_operationQueue addOperation:^{
+                        PINCache *strongSelf = weakSelf;
+                        if (strongSelf)
+                            block(strongSelf, diskCacheKey, diskCacheObject); //回调
+                    }];
+                }];
+            }
+        }];
+    }];
+}
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步设置
+- (void)setObjectAsync:(id &lt;NSCoding&gt;)object forKey:(NSString *)key withCost:(NSUInteger)cost completion:(PINCacheObjectBlock)block
+{
+    if (!key || !object)
+        return;
+  
+    PINOperationGroup *group = [PINOperationGroup asyncOperationGroupWithQueue:_operationQueue]; //生成操作组
+    
+    [group addOperation:^{
+        [_memoryCache setObject:object forKey:key withCost:cost]; //设置内存缓存
+    }];
+    [group addOperation:^{
+        [_diskCache setObject:object forKey:key]; //设置硬盘缓存
+    }];
+  
+    if (block) {
+        [group setCompletion:^{
+            block(self, key, object); //设置完毕后回调
+        }];
+    }
+    
+    [group start];
+}
+</code></pre></div></div>
+
+<h3 id="pinmemorycache">PINMemoryCache</h3>
+
+<p>支持下标存取，提供声明周期的各种回调方法，提供异步存取方法，持有一个PINOperationqueue保存，移除键值对时，向Queue中添加一个对应的operation（这怎么保证线程安全？）</p>
+
+<h3 id="pindiskcache">PINDiskCache</h3>
+
+<p>diskCache操作和MemoryCache类似，不过操作对象变成了文件，每个key对应一个文件路径（使用NSKeydArchiver序列化对象）</p>
+
+<h2 id="ref">Ref</h2>
+
+<p><a href="http://clang.llvm.org/docs/ObjectiveCLiterals.html">http://clang.llvm.org/docs/ObjectiveCLiterals.html</a></p>
+

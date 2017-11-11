@@ -90,8 +90,8 @@ static struct /*_ivar_list_t*/
 } _OBJC_$_INSTANCE_VARIABLES_Test __attribute__ ((used, section ("__DATA,__objc_const"))) = {
      sizeof(_ivar_t),
      2,
-     {{(unsigned long int *)&OBJC_IVAR_$_Test$_str, "_str", "@\"NSString\"", 3, 8},
-      {(unsigned long int *)&OBJC_IVAR_$_Test$_obj, "_obj", "@\"NSObject\"", 3, 8}}
+     \{\{(unsigned long int *)&OBJC_IVAR_$_Test$_str, "_str", "@"NSString", 3, 8},
+      {(unsigned long int *)&OBJC_IVAR_$_Test$_obj, "_obj", "@"NSObject", 3, 8\}\}
 };
 ```
 
@@ -108,11 +108,11 @@ static struct /*_method_list_t*/ {
 } _OBJC_$_INSTANCE_METHODS_Test __attribute__ ((used, section ("__DATA,__objc_const"))) = {
      sizeof(_objc_method),
      5,
-     {{(struct objc_selector *)"doSomething", "v16@0:8", (void *)_I_Test_doSomething},
+     \{\{(struct objc_selector *)"doSomething", "v16@0:8", (void *)_I_Test_doSomething},
      {(struct objc_selector *)"str", "@16@0:8", (void *)_I_Test_str},
      {(struct objc_selector *)"setStr:", "v24@0:8@16", (void *)_I_Test_setStr_},
      {(struct objc_selector *)"obj", "@16@0:8", (void *)_I_Test_obj},
-     {(struct objc_selector *)"setObj:", "v24@0:8@16", (void *)_I_Test_setObj_}}
+     {(struct objc_selector *)"setObj:", "v24@0:8@16", (void *)_I_Test_setObj_\}\}
 };
 ```
 
@@ -125,8 +125,8 @@ static struct /*_prop_list_t*/ {
 } _OBJC_$_PROP_LIST_Test __attribute__ ((used, section ("__DATA,__objc_const"))) = {
      sizeof(_prop_t),
      2,
-     {{"str","T@\"NSString\",V_str"},
-     {"obj","T@\"NSObject\",V_obj"}}
+     \{\{"str","T@\"NSString\",V_str"},
+     {"obj","T@\"NSObject\",V_obj"\}\}
 };
 ```
 
