@@ -75,9 +75,10 @@ static void _I_Test_setObj_(Test * self, SEL _cmd, NSObject *obj) { (*(NSObject 
 ```
 
 接着定义了实例变量列表结构，其中OBJC_IVAR_$_Test$_str 是实例变量_str所在偏移
-```
-extern "C" unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section ("__DATA,__objc_ivar"))) = __OFFSETOFIVAR__(struct Test, _str);```
 
+```
+extern "C" unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section ("__DATA,__objc_ivar"))) = __OFFSETOFIVAR__(struct Test, _str);
+```
 
 以下_OBJC_$_INSTANCE_VARIABLES_Test的内存布局和_ivar_list_t结构完全一致，记录了Test类中实例变量偏移位置。
 
