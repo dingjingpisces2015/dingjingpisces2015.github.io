@@ -258,15 +258,14 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
             }
         }
     }
-
-//...
+    //...
 }
 ```
 
 读入类数据的代码为```_getObjc2ClassList ```,跳到定义可以看到
 
-```
 
+```
 GETSECT(_getObjc2ClassList,           classref_t,      "__objc_classlist");
 //等价于
 type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) { 
@@ -274,6 +273,7 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
 }
 
 ```
+
 可以看到```_getObjc2ClassList ```读了数据段中的__objc_classlist,
 在rewrite后的cpp中搜索__objc_classlist可以看到
 
@@ -288,7 +288,7 @@ static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section ("
 最后关于为啥category不能添加成员变量，我的理解是struct结构中的成员变量经过编译器编译，相对偏移地址已经固定了，动态添加到末尾会破坏整个内存结构的读取，因此只能通过另外一个全局结构（associationMap？），来管理与对象关联的额外变量。
 
 ## 最后
-阅读运行时源码对底层知识好像可以有更多的理解，但仍有挺多东西不理解的，欢迎讨论吧。
+阅读运行时源码对底层知识好像可以有更多的理解，但仍有挺多东西不理解的，欢迎讨论~
 
 
 
