@@ -192,18 +192,34 @@ struct objc_class : objc_object {
 
 - isa是一个指向_class_t结构的指针，而Class 也是一个指向objc_class的指针
 -  superclass也同为指针
--  cache和vtable分别是两个指针大小，而cache_t结构为```struct cache_t {
+-  cache和vtable分别是两个指针大小，而cache_t结构为
+
+```struct cache_t {
     struct bucket_t *_buckets;
     mask_t _mask;
     mask_t _occupied;
-``` 即cache可以对应buckets的指针，而mask_t结构为指针的一半，两个mask_t正好对应了vtable的指针位置
+``` 
+
+即cache可以对应buckets的指针，而mask_t结构为指针的一半，两个mask_t正好对应了vtable的指针位置
 - 最后ro 就对应了 class_data_bits_t（bits）结构中的指针
 
-对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$_Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO_$_Test结构在```class_rw_t *data() { 
+对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$_Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO_$_Test结构在
+```
+class_rw_t *data() { 
         return bits.data();
-    } ```方法中返回，而bits.data()方法的返回值为bits&FAST_DATA_MASK （这个FAST_DATA_MASK  ```#define FAST_DATA_MASK          0x00007ffffffffff8UL``` 从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与```taggedPoint```区分，前面为何是0还是不能理解）
+    } 
+```
+方法中返回，而bits.data()方法的返回值为bits&FAST_DATA_MASK （这个FAST_DATA_MASK  
+```
+#define FAST_DATA_MASK          0x00007ffffffffff8UL
+```
+
+ 从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与
+ ```taggedPoint```
+ 区分，前面为何是0还是不能理解）
     
 Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下
+
 ```
 struct class_rw_t {
     // Be warned that Symbolication knows the layout of this structure.
