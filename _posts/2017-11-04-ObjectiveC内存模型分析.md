@@ -38,7 +38,7 @@ tags:
 ```
 @interface Test : NSObject
 
-@property NSString *str；
+@property NSString *str;
 @property NSObject *obj;
 - (void)doSomething;
 
@@ -194,16 +194,21 @@ struct objc_class : objc_object {
 -  superclass也同为指针
 -  cache和vtable分别是两个指针大小，而cache_t结构为
 
-```struct cache_t {
+```
+struct cache_t {
     struct bucket_t *_buckets;
     mask_t _mask;
     mask_t _occupied;
+}
+
 ``` 
 
 即cache可以对应buckets的指针，而mask_t结构为指针的一半，两个mask_t正好对应了vtable的指针位置
+
 - 最后ro 就对应了 class_data_bits_t（bits）结构中的指针
 
 对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$_Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO_$_Test结构在
+
 ```
 class_rw_t *data() { 
         return bits.data();
