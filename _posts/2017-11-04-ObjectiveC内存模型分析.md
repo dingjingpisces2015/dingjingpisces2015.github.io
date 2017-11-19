@@ -194,6 +194,9 @@ struct objc_class : objc_object {
 -  superclass也同为指针
 -  cache和vtable分别是两个指针大小，而cache_t结构为
 
+
+
+
 ```
 struct cache_t {
     struct bucket_t *_buckets;
@@ -215,12 +218,15 @@ class_rw_t *data() {
     } 
 ```
 方法中返回，而bits.data()方法的返回值为bits&FAST_DATA_MASK （这个FAST_DATA_MASK  
+
 ```
 #define FAST_DATA_MASK          0x00007ffffffffff8UL
 ```
 
  从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与
- ```taggedPoint```
+ ```
+ taggedPoint
+ ```
  区分，前面为何是0还是不能理解）
     
 Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下
