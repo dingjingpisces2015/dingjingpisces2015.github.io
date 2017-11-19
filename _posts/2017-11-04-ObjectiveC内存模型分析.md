@@ -227,9 +227,10 @@ class_rw_t *data() {
  ```
  taggedPoint
  ```
- 区分，前面为何是0还是不能理解）
+区分，前面为何是0还是不能理解）
     
 Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下
+
 
 ```
 struct class_rw_t {
@@ -250,6 +251,7 @@ struct class_rw_t {
    	//method list 
    }
 ```
+
 拿class_rw_t和_class_ro_t（rewrite后的结构）进行对比，可以发现这两个结构的成员变量偏移一致，**至此，Objective-c编译后生成的结构已经完全和runtime中的对应了，这也就意味着通过runtime中的结构查找对应偏移理论上是可以取到编译后结构的值，这是问题2，4的解答，但这也就引出了另一个问题,即问题3，运行时如何将编译时生成的数据和运行时方法联系起来。**
 
 ## 运行时类加载
@@ -290,7 +292,11 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
 }
 ```
 
-读入类数据的代码为```_getObjc2ClassList ```,跳到定义可以看到
+读入类数据的代码为
+```
+_getObjc2ClassList 
+```
+,跳到定义可以看到
 
 
 ```
