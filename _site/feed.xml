@@ -3,17 +3,1204 @@
   <channel>
     <title>D Tech Blog</title>
     <description>iOS 开发分享</description>
-    <link>/</link>
-    <atom:link href="/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Fri, 21 Oct 2016 10:50:54 +0800</pubDate>
-    <lastBuildDate>Fri, 21 Oct 2016 10:50:54 +0800</lastBuildDate>
-    <generator>Jekyll v3.2.1</generator>
+    <link>http://localhost:4000/</link>
+    <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Sat, 25 Nov 2017 18:48:45 +0800</pubDate>
+    <lastBuildDate>Sat, 25 Nov 2017 18:48:45 +0800</lastBuildDate>
+    <generator>Jekyll v3.6.2</generator>
+    
+      <item>
+        <title>Runtime中的数据结构</title>
+        <description>&lt;h1 id=&quot;runtime中的数据结构&quot;&gt;Runtime中的数据结构&lt;/h1&gt;
+
+&lt;h2 id=&quot;stripedmapobjc-privateh&quot;&gt;StripedMap(objc-private.h)&lt;/h2&gt;
+&lt;p&gt;在synchronized ,ARC的实现中都用到了这个结构
+SrtipedMap是一种根据传入指针将对象映射到数组不同位置的HashMap。
+其中映射算法为： 右移4位 &amp;amp; 右移 9位 模8 （嵌入式系统）&lt;/p&gt;
+
+&lt;p&gt;StripedMap 最特别的一点是针对CPU缓存进行了优化，在mac系统上，CPU line 的大小一般是64bytes,&lt;/p&gt;
+
+&lt;p&gt;而PaddedT类型是将模板类型以64bytes对齐后的结构，这就保证了每个对象都有独立的CPU缓存单元，存入array的对象之间不会因为另外对象的修改需要读取内存，而是可以直接读取CPU缓存，提高读写速度。&lt;/p&gt;
+
+&lt;p&gt;以下是StripedMap源码，留下了关键部分。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// StripedMap&amp;lt;T&amp;gt; is a map of void* -&amp;gt; T, sized appropriately
+// for cache-friendly lock striping.
+// For example, this may be used as StripedMap&amp;lt;spinlock_t&amp;gt;
+// or as StripedMap&amp;lt;SomeStruct&amp;gt; where SomeStruct stores a spin lock.
+template&amp;lt;typename T&amp;gt;
+class StripedMap {
+
+    enum { CacheLineSize = 64 };
+
+#if TARGET_OS_EMBEDDED
+    enum { StripeCount = 8 };
+#else
+    enum { StripeCount = 64 };
+#endif
+
+    struct PaddedT {
+        T value alignas(CacheLineSize);
+    };
+
+    PaddedT array[StripeCount];
+
+    static unsigned int indexForPointer(const void *p) {
+        uintptr_t addr = reinterpret_cast&amp;lt;uintptr_t&amp;gt;(p);
+        return ((addr &amp;gt;&amp;gt; 4) ^ (addr &amp;gt;&amp;gt; 9)) % StripeCount;
+    }
+
+ public:
+    T&amp;amp; operator[] (const void *p) {
+        return array[indexForPointer(p)].value;
+    }
+    const T&amp;amp; operator[] (const void *p) const {
+        return const_cast&amp;lt;StripedMap&amp;lt;T&amp;gt;&amp;gt;(this)[p];
+    }
+
+};
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;而StripedMap,顾名思义，条纹锁？为啥是条纹，我的理解是，StripedMap常常用于分离锁的结构，模板T的类型往往是一个链表（每个链表共用一个锁），多个链表结构看起来就比较像条纹了，脑洞仅供娱乐。&lt;/p&gt;
+
+&lt;h2 id=&quot;densemapllvm-densemaph&quot;&gt;DenseMap(llvm-DenseMap.h)&lt;/h2&gt;
+
+&lt;p&gt;这个家伙是用于引用计数的数据结构，本质是哈希表，和一般哈希表不同的是表的组织方法和冲突处理方式。&lt;/p&gt;
+
+&lt;p&gt;下面用于记录对象retainCount的RefcountMap就是一个DenseMap.&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct SideTable {
+    spinlock_t slock;
+    RefcountMap refcnts;
+    weak_table_t weak_table;
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;DenseMap一开始是由谷歌提出的一种哈希算法（其实我感觉对于哈希来说更多的是冲突处理方法），很惊喜在苹果的llvm代码中可以看到苹果的实现。&lt;/p&gt;
+
+&lt;p&gt;DenseMap的成员变量有&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  BucketT *Buckets;
+  unsigned NumEntries;
+  unsigned NumTombstones;
+  unsigned NumBuckets;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;其中&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;BucketT 是std:pair结构，对DenseMap来说，key就是哈希键值，value就是真正要存入的对象,而pair的内存分布连续，键值对往往同时存在于cache line。&lt;/li&gt;
+  &lt;li&gt;NumEntries 表明条目个数&lt;/li&gt;
+  &lt;li&gt;NumTombstones 表示被删除的键值对个数&lt;/li&gt;
+  &lt;li&gt;NumBuckets 表示Buckets个数&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;接下来看看DenseMap最关键的冲突处理逻辑：
+即&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;首先获得Bucket指针和Bucket数&lt;/li&gt;
+  &lt;li&gt;根据传入指针计算哈希值并以Bucket数取模的到BucketNo&lt;/li&gt;
+  &lt;li&gt;循环查找
+    &lt;ol&gt;
+      &lt;li&gt;根据BucketNo找到键在Bucket中的偏移位置&lt;/li&gt;
+      &lt;li&gt;如果该偏移位置有同样的键，则&lt;strong&gt;返回Bucket并认为找到&lt;/strong&gt;&lt;/li&gt;
+      &lt;li&gt;如果该偏移位置是空的，则&lt;strong&gt;返回该Bucket并认为没找到&lt;/strong&gt;&lt;/li&gt;
+      &lt;li&gt;如果该位置是空，并且上一次查到到了Tombstone，则&lt;strong&gt;返回Tombstone位置&lt;/strong&gt;&lt;/li&gt;
+      &lt;li&gt;如果该位置是一个Tombstone并且从未找到过Tombstone,则记下这个位置&lt;/li&gt;
+      &lt;li&gt;到这一步还没找到，则按照依次增加按序遍历后面的Bucket(这个逻辑和Google的实现不一致)&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;以下为源码&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;template&amp;lt;typename LookupKeyT&amp;gt;
+  bool LookupBucketFor(const LookupKeyT &amp;amp;Val,
+                       const BucketT *&amp;amp;FoundBucket) const {
+    const BucketT *BucketsPtr = getBuckets();
+    const unsigned NumBuckets = getNumBuckets();
+
+    if (NumBuckets == 0) {
+      FoundBucket = 0;
+      return false;
+    }
+
+    // FoundTombstone - Keep track of whether we find a tombstone or zero value while probing.
+    const BucketT *FoundTombstone = 0;
+    const KeyT EmptyKey = getEmptyKey();
+    const KeyT TombstoneKey = getTombstoneKey();
+    assert(!KeyInfoT::isEqual(Val, EmptyKey) &amp;amp;&amp;amp;
+           !KeyInfoT::isEqual(Val, TombstoneKey) &amp;amp;&amp;amp;
+           &quot;Empty/Tombstone value shouldn't be inserted into map!&quot;);
+
+    unsigned BucketNo = getHashValue(Val) &amp;amp; (NumBuckets-1);
+    unsigned ProbeAmt = 1;
+    while (1) {
+      const BucketT *ThisBucket = BucketsPtr + BucketNo;
+      // Found Val's bucket?  If so, return it.
+      if (KeyInfoT::isEqual(Val, ThisBucket-&amp;gt;first)) {
+        FoundBucket = ThisBucket;
+        return true;
+      }
+
+      // If we found an empty bucket, the key doesn't exist in the set.
+      // Insert it and return the default value.
+      if (KeyInfoT::isEqual(ThisBucket-&amp;gt;first, EmptyKey)) {
+        // If we've already seen a tombstone while probing, fill it in instead
+        // of the empty bucket we eventually probed to.
+        if (FoundTombstone) ThisBucket = FoundTombstone;
+        FoundBucket = FoundTombstone ? FoundTombstone : ThisBucket;
+        return false;
+      }
+
+      // If this is a tombstone, remember it.  If Val ends up not in the map, we
+      // prefer to return it than something that would require more probing.
+      // Ditto for zero values.
+      if (KeyInfoT::isEqual(ThisBucket-&amp;gt;first, TombstoneKey) &amp;amp;&amp;amp; !FoundTombstone)
+        FoundTombstone = ThisBucket;  // Remember the first tombstone found.
+      if (ZeroValuesArePurgeable  &amp;amp;&amp;amp;
+          ThisBucket-&amp;gt;second == 0  &amp;amp;&amp;amp;  !FoundTombstone)
+        FoundTombstone = ThisBucket;
+
+      // Otherwise, it's a hash collision or a tombstone, continue quadratic
+      // probing.
+      if (ProbeAmt &amp;gt; NumBuckets) {
+          // No empty buckets in table. Die.
+          _objc_fatal(&quot;Hash table corrupted. This is probably a memory error &quot;
+                      &quot;somewhere. (table at %p, buckets at %p (%zu bytes), &quot;
+                      &quot;%u buckets, %u entries, %u tombstones, &quot;
+                      &quot;data %p %p %p %p)&quot;,
+                      this, BucketsPtr, malloc_size(BucketsPtr),
+                      NumBuckets, getNumEntries(), getNumTombstones(),
+                      ((void**)BucketsPtr)[0], ((void**)BucketsPtr)[1],
+                      ((void**)BucketsPtr)[2], ((void**)BucketsPtr)[3]);
+      }
+      BucketNo += ProbeAmt++;
+      BucketNo&amp;amp;= (NumBuckets-1);
+    }
+  }
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+</description>
+        <pubDate>Mon, 20 Nov 2017 00:59:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/11/20/runtime%E4%B8%AD%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/11/20/runtime%E4%B8%AD%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>runtime</category>
+        
+        <category>源码</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>引用计数实现原理</title>
+        <description>&lt;h1 id=&quot;引用计数实现原理&quot;&gt;引用计数实现原理&lt;/h1&gt;
+
+&lt;p&gt;在iOS中，使用引用计数管理内存，本文会从runtime源码中将引用计数的代码剥离出来，尝试梳理出引用计数retain,release做了什么。&lt;/p&gt;
+
+&lt;h2 id=&quot;sidetables结构&quot;&gt;SideTables结构&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/dingjingpisces2015/dingjingpisces2015.github.io/master/img/post-sidetable.png&quot; alt=&quot;SideTables&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;retain&quot;&gt;retain&lt;/h2&gt;
+
+&lt;p&gt;跟踪Runtime中NSObject的retain方法实现，可以看到reain方法最后调用了rootRetain(true, true)
+总结rootRetain执行流程如下：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;如果是TaggedPointer不做任何处理
+    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (isTaggedPointer()) return (id)this;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;判断是否是指针，如果是指针，直接放入SideTable进行引用计数&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (slowpath(!newisa.nonpointer)) { //如果newisa.nopointer = falae,即isa是个指针
+            ClearExclusive(&amp;amp;isa.bits);//这个函数啥都不做，是空的
+            if (!tryRetain &amp;amp;&amp;amp; sideTableLocked) sidetable_unlock();//以self为参数，解锁这组sideTable
+            if (tryRetain) return sidetable_tryRetain() ? (id)this : nil;
+            else return sidetable_retain();//因为isa是个指针，没有额外的retain信息，因此不得不去操作sideTable进行引用计数
+        //至此非指针的isa的retain就处理完了
+        }
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;非指针情况，在isa的extra_RC位进行引用计数加一&lt;/p&gt;
+
+    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;newisa.bits = addc(newisa.bits, RC_ONE, 0, &amp;amp;carry);  // extra_rc++ 在extra_rc位上+1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+
+    &lt;ul&gt;
+      &lt;li&gt;如果没有溢出，保存新的isa&lt;/li&gt;
+    &lt;/ul&gt;
+
+    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;slowpath(!StoreExclusive(&amp;amp;isa.bits, oldisa.bits, newisa.bits))
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+
+    &lt;ul&gt;
+      &lt;li&gt;如果溢出了，将extra_rc的一半值存入sideTable，has_sidetable_rc置1&lt;/li&gt;
+    &lt;/ul&gt;
+
+    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (slowpath(carry)) { //如果溢出了
+          // newisa.extra_rc++ overflowed
+          if (!handleOverflow) { //retain方法调用中传入true
+              ClearExclusive(&amp;amp;isa.bits);
+              return rootRetain_overflow(tryRetain);
+          }
+          // Leave half of the retain counts inline and
+          // prepare to copy the other half to the side table.
+          if (!tryRetain &amp;amp;&amp;amp; !sideTableLocked) sidetable_lock();
+          sideTableLocked = true;
+          transcribeToSideTable = true;
+          newisa.extra_rc = RC_HALF; //extra_rc变成现在的一半
+          newisa.has_sidetable_rc = true; //标志需要用sidetable
+      }
+if (slowpath(transcribeToSideTable)) {
+      // Copy the other half of the retain counts to the side table.
+      sidetable_addExtraRC_nolock(RC_HALF); //将this的引用计数记录到SideTable中，但只记HALF，话说为啥不全部挪过来？
+  }
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;保存isa直至成功&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;release&quot;&gt;release&lt;/h2&gt;
+&lt;p&gt;release最后会调用到rootRelease(true,false)， rootRelease的处理过程大致与rootRetain相反，不过增加了对象销毁逻辑&lt;/p&gt;
+
+&lt;p&gt;以下是处理流程&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;判断是否为TaggedPointer，是则不进行处理&lt;/li&gt;
+  &lt;li&gt;如果是指针，直接利用sideTable中的值进行引用计数，refCnt—&lt;/li&gt;
+  &lt;li&gt;如果是非指针， ExtraRC位减一&lt;/li&gt;
+  &lt;li&gt;如果无溢出，本次操作结束&lt;/li&gt;
+  &lt;li&gt;如果有溢出，判断是否可以从sideTable借位，如果可以则对应处理，不行就认为对象应该被释放，调用dealloc方法。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;苹果对空间的极度利用让人印象深刻，从isa指针与标志位的复用，到利用固定位数进行引用计数，极大程度的避免了申请堆上空间，方式值得借鉴。&lt;/p&gt;
+</description>
+        <pubDate>Sun, 05 Nov 2017 02:58:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/11/05/%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/11/05/%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>runtime</category>
+        
+        <category>源码</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Objective-C内存模型分析</title>
+        <description>&lt;h1 id=&quot;objective-c内存模型分析&quot;&gt;Objective-C内存模型分析&lt;/h1&gt;
+
+&lt;h2 id=&quot;简介&quot;&gt;简介&lt;/h2&gt;
+
+&lt;p&gt;在iOS开发中，我们知道iOS对象可以在运行时被操作，执行动态查找/执行方法等操作。通过阅读runtime源码，很容易将objc_class和Class联系在一起，认为一个类的存储结构是和objc_class一致。但是编译器如何将Objective-c的类编译成objc_class结构，objc_class中如method_list结构中存储的OC方法如何获取到函数地址，成员变量内存地址如何偏移等问题一直像一团迷雾一样阻隔在OC对象和其runtime结构之间，本文希望通过clang的rewrite-objc揭开这层神秘的面纱，加深对运行时机制的理解。&lt;/p&gt;
+
+&lt;h2 id=&quot;几个一直困扰的问题&quot;&gt;几个一直困扰的问题&lt;/h2&gt;
+
+&lt;p&gt;下面是在研究Objective-C内存模型过程中一直思考和希望解决的问题，在文章的中会一一给出解答。&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;clang rewrite-objc做了什么。&lt;/li&gt;
+  &lt;li&gt;编译器怎么把OC类转换为C++类。&lt;/li&gt;
+  &lt;li&gt;运行时如何加载所有类。&lt;/li&gt;
+  &lt;li&gt;对象的成员变量如何排列。&lt;/li&gt;
+  &lt;li&gt;为啥category不能添加成员变量。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&quot;rewrite-objc&quot;&gt;rewrite-objc&lt;/h2&gt;
+
+&lt;p&gt;为了研究编译器在编译OC代码的过程中，先利用rewrite-objc方法将OC的&lt;em&gt;&lt;a href=&quot;https://github.com/dingjingpisces2015/objc4-709/blob/master/RewriteToC/object.m&quot;&gt;object.m&lt;/a&gt;&lt;/em&gt; 文件重写成 &lt;em&gt;&lt;a href=&quot;https://github.com/dingjingpisces2015/objc4-709/blob/master/RewriteToC/object.cpp&quot;&gt;object.cpp&lt;/a&gt;&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;拥有两个属性，一个方法的Test类&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;@interface&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Test&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;NSObject&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;@property&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;NSString&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;str&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;@property&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;NSObject&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;obj&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;doSomething&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;@end&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;经过转换，首先可以看到定义了&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;typedef struct objc_object Test;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;即Test的结构和objc_object相同，而objc_object本身只有一个&lt;code class=&quot;highlighter-rouge&quot;&gt;isa&lt;/code&gt;指针&lt;/p&gt;
+
+&lt;p&gt;接着定义实例变量结构体,如下，可以看到继承自NSObject的成员变量排列在最前方（&lt;code class=&quot;highlighter-rouge&quot;&gt;NSObject_IVARS&lt;/code&gt;），&lt;code class=&quot;highlighter-rouge&quot;&gt;Test&lt;/code&gt;类中的成员变量按声明顺序排列&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct Test_IMPL {
+     struct NSObject_IMPL NSObject_IVARS; 
+     NSString *_str;
+     NSObject *_obj;
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;之后将所有方法声明成静态变量，其实可以看做类似于C++对象的成员函数，&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static void _I_Test_doSomething(Test * self, SEL _cmd) {}
+
+static NSString * _I_Test_str(Test * self, SEL _cmd) { return (*(NSString **)((char *)self + OBJC_IVAR_$_Test$_str)); }
+static void _I_Test_setStr_(Test * self, SEL _cmd, NSString *str) { (*(NSString **)((char *)self + OBJC_IVAR_$_Test$_str)) = str; }
+
+static NSObject * _I_Test_obj(Test * self, SEL _cmd) { return (*(NSObject **)((char *)self + OBJC_IVAR_$_Test$_obj)); }
+static void _I_Test_setObj_(Test * self, SEL _cmd, NSObject *obj) { (*(NSObject **)((char *)self + OBJC_IVAR_$_Test$_obj)) = obj; }
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;接着定义了实例变量列表结构，其中OBJC_IVAR_$_Test$_str 是实例变量_str所在偏移&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extern &quot;C&quot; unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section (&quot;__DATA,__objc_ivar&quot;))) = __OFFSETOFIVAR__(struct Test, _str);
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;以下_OBJC_$_INSTANCE_VARIABLES_Test的内存布局和_ivar_list_t结构完全一致，记录了Test类中实例变量偏移位置。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct /*_ivar_list_t*/ 
+     unsigned int entsize;  // sizeof(struct _prop_t)
+     unsigned int count;
+     struct _ivar_t ivar_list[2];
+} _OBJC_$_INSTANCE_VARIABLES_Test __attribute__ ((used, section (&quot;__DATA,__objc_const&quot;))) = {
+     sizeof(_ivar_t),
+     2,
+     \{\{(unsigned long int *)&amp;amp;OBJC_IVAR_$_Test$_str, &quot;_str&quot;, &quot;@&quot;NSString&quot;, 3, 8},
+      {(unsigned long int *)&amp;amp;OBJC_IVAR_$_Test$_obj, &quot;_obj&quot;, &quot;@&quot;NSObject&quot;, 3, 8\}\}
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;以上即为实例变量布局记录在runtime的过程。&lt;/p&gt;
+
+&lt;p&gt;接下来看，可以发现编译后的代码还生成了方法结构体，和属性列表&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//定义方法结构体
+static struct /*_method_list_t*/ {
+     unsigned int entsize;  // sizeof(struct _objc_method)
+     unsigned int method_count;
+     struct _objc_method method_list[5];
+} _OBJC_$_INSTANCE_METHODS_Test __attribute__ ((used, section (&quot;__DATA,__objc_const&quot;))) = {
+     sizeof(_objc_method),
+     5,
+     \{\{(struct objc_selector *)&quot;doSomething&quot;, &quot;v16@0:8&quot;, (void *)_I_Test_doSomething},
+     {(struct objc_selector *)&quot;str&quot;, &quot;@16@0:8&quot;, (void *)_I_Test_str},
+     {(struct objc_selector *)&quot;setStr:&quot;, &quot;v24@0:8@16&quot;, (void *)_I_Test_setStr_},
+     {(struct objc_selector *)&quot;obj&quot;, &quot;@16@0:8&quot;, (void *)_I_Test_obj},
+     {(struct objc_selector *)&quot;setObj:&quot;, &quot;v24@0:8@16&quot;, (void *)_I_Test_setObj_\}\}
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//定义属性列表
+static struct /*_prop_list_t*/ {
+     unsigned int entsize;  // sizeof(struct _prop_t)
+     unsigned int count_of_properties;
+     struct _prop_t prop_list[2];
+} _OBJC_$_PROP_LIST_Test __attribute__ ((used, section (&quot;__DATA,__objc_const&quot;))) = {
+     sizeof(_prop_t),
+     2,
+     \{\{&quot;str&quot;,&quot;T@\&quot;NSString\&quot;,V_str&quot;},
+     {&quot;obj&quot;,&quot;T@\&quot;NSObject\&quot;,V_obj&quot;\}\}
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;接下来cpp中定义类一个将方法列表，变量列表，属性列表整合起来的一个类,&lt;em&gt;OBJC_CLASS_RO&lt;/em&gt;$_Test 但这个类的布局看起来和objc_class并不一致&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct _class_ro_t _OBJC_CLASS_RO_$_Test __attribute__ ((used, section (&quot;__DATA,__objc_const&quot;))) = {
+     0, __OFFSETOFIVAR__(struct Test, _str), sizeof(struct Test_IMPL),
+     (unsigned int)0,
+     0,
+     &quot;Test&quot;,
+     (const struct _method_list_t *)&amp;amp;_OBJC_$_INSTANCE_METHODS_Test,
+     0,
+     (const struct _ivar_list_t *)&amp;amp;_OBJC_$_INSTANCE_VARIABLES_Test,
+     0,
+     (const struct _prop_list_t *)&amp;amp;_OBJC_$_PROP_LIST_Test,
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;之后便出现了真正的类定义，将上述_OBJC_CLASS_RO_$&lt;em&gt;Test赋值给OBJC_CLASS&lt;/em&gt;$&lt;em&gt;Test，元类同理,当一个类定义文件没被引入工程时，常常能看到诸如
+“_OBJC_CLASS&lt;/em&gt;$&lt;em&gt;XXClass, referenced from:xxx “这类的错误提示，正是因为该类在符号表中的名字实际是_OBJC_CLASS&lt;/em&gt;$_XXClass（下面的代码中可以看到通过dllexport在链接时导出了），而不是我们在.m文件中定义的名字。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extern &quot;C&quot; __declspec(dllexport) struct _class_t OBJC_CLASS_$_Test __attribute__ ((used, section (&quot;__DATA,__objc_data&quot;))) = {
+     0, // &amp;amp;OBJC_METACLASS_$_Test,
+     0, // &amp;amp;OBJC_CLASS_$_NSObject,
+     0, // (void *)&amp;amp;_objc_empty_cache,
+     0, // unused, was (void *)&amp;amp;_objc_empty_vtable,
+     &amp;amp;_OBJC_CLASS_RO_$_Test,
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;再仔细观察，OBJC_CLASS_$_Test是struct _class_t结构，而struct _class_t结构如下,
+和objc_class对比可以发现，&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct _class_t {
+	struct _class_t *isa;
+	struct _class_t *superclass;
+	void *cache;
+	void *vtable;
+	struct _class_ro_t *ro;
+};
+//compare with
+
+struct objc_class : objc_object {
+    // Class ISA;
+    Class superclass;
+    cache_t cache;             // formerly cache pointer and vtable
+    class_data_bits_t bits;    // class_rw_t * plus custom rr/alloc flags
+    
+    class_rw_t *data() { 
+        return bits.data();
+    }
+    void setData(class_rw_t *newData) {
+        bits.setData(newData);
+    }
+    //method list 
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;isa是一个指向_class_t结构的指针，而Class 也是一个指向objc_class的指针&lt;/li&gt;
+  &lt;li&gt;superclass也同为指针&lt;/li&gt;
+  &lt;li&gt;cache和vtable分别是两个指针大小，而cache_t结构为&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct cache_t {
+    struct bucket_t *_buckets;
+    mask_t _mask;
+    mask_t _occupied;
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;即cache可以对应buckets的指针，而mask_t结构为指针的一半，两个mask_t正好对应了vtable的指针位置&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;最后ro 就对应了 class_data_bits_t（bits）结构中的指针&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$&lt;em&gt;Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO&lt;/em&gt;$_Test结构在&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class_rw_t *data() { 
+        return bits.data();
+    } 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;方法中返回，而bits.data()方法的返回值为bits&amp;amp;FAST_DATA_MASK （这个FAST_DATA_MASK&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;#define FAST_DATA_MASK          0x00007ffffffffff8UL
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; taggedPoint
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;区分，前面为何是0还是不能理解）&lt;/p&gt;
+
+&lt;p&gt;Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct class_rw_t {
+    // Be warned that Symbolication knows the layout of this structure.
+    uint32_t flags;
+    uint32_t version;
+
+    const class_ro_t *ro;
+
+    method_array_t methods;
+    property_array_t properties;
+    protocol_array_t protocols;
+
+    Class firstSubclass;
+    Class nextSiblingClass;
+
+    char *demangledName;
+   	//method list 
+   }
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;拿class_rw_t和_class_ro_t（rewrite后的结构）进行对比，可以发现这两个结构的成员变量偏移一致，&lt;strong&gt;至此，Objective-c编译后生成的结构已经完全和runtime中的对应了，这也就意味着通过runtime中的结构查找对应偏移理论上是可以取到编译后结构的值，这是问题2，4的解答，但这也就引出了另一个问题,即问题3，运行时如何将编译时生成的数据和运行时方法联系起来。&lt;/strong&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;运行时类加载&quot;&gt;运行时类加载&lt;/h2&gt;
+
+&lt;p&gt;通过仔细阅读runtime源码，发现了__read_images方法，为了更清晰的表述，下面提取出了__read_images中读取类结构数据的部分代码&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
+{
+
+//...
+   for (EACH_HEADER) {//这里面的EACH_HEADER不知道是啥
+        if (! mustReadClasses(hi)) {
+            // Image is sufficiently optimized that we need not call readClass()
+            continue;
+        }
+
+        bool headerIsBundle = hi-&amp;gt;isBundle();
+        bool headerIsPreoptimized = hi-&amp;gt;isPreoptimized();
+
+        classref_t *classlist = _getObjc2ClassList(hi, &amp;amp;count); //这里读入了类中的数据信息
+        for (i = 0; i &amp;lt; count; i++) {
+            Class cls = (Class)classlist[i];
+            Class newCls = readClass(cls, headerIsBundle, headerIsPreoptimized);
+
+            if (newCls != cls  &amp;amp;&amp;amp;  newCls) {
+                // Class was moved but not deleted. Currently this occurs 
+                // only when the new class resolved a future class.
+                // Non-lazily realize the class below.
+                resolvedFutureClasses = (Class *)
+                    realloc(resolvedFutureClasses, 
+                            (resolvedFutureClassCount+1) * sizeof(Class));
+                resolvedFutureClasses[resolvedFutureClassCount++] = newCls;
+            }
+        }
+    }
+    //...
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;读入类数据的代码为&lt;/p&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;_getObjc2ClassList 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;,跳到定义可以看到&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;GETSECT(_getObjc2ClassList,           classref_t,      &quot;__objc_classlist&quot;);
+//等价于
+type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) { 
+ return getDataSection&amp;lt;classref_t&amp;gt;(mhdr, __objc_classlist, nil, outCount); 
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;可以看到&lt;code class=&quot;highlighter-rouge&quot;&gt;_getObjc2ClassList&lt;/code&gt;读了数据段中的__objc_classlist,
+在rewrite后的cpp中搜索__objc_classlist可以看到&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section (&quot;__DATA, __objc_classlist,regular,no_dead_strip&quot;)))= {
+	&amp;amp;OBJC_CLASS_$_Test,
+};
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;strong&gt;这里将OC中的类指针依次放入该结构中，而read_images代码根据传入的指针，调用readClass方法根据struct中的变量值依次初始化了objc_class中的数据，并将类写入结构为NXMapTable的静态变量。实现了将静态的结构体读入全局变量的目的，这也正是整个运行时的基础。&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;最后关于为啥category不能添加成员变量，我的理解是struct结构中的成员变量经过编译器编译，相对偏移地址已经固定了，动态添加到末尾会破坏整个内存结构的读取，因此只能通过另外一个全局结构（associationMap？），来管理与对象关联的额外变量。&lt;/p&gt;
+
+&lt;h2 id=&quot;最后&quot;&gt;最后&lt;/h2&gt;
+&lt;p&gt;阅读运行时源码对底层知识好像可以有更多的理解，但仍有挺多东西不理解的，欢迎讨论~&lt;/p&gt;
+
+</description>
+        <pubDate>Sun, 05 Nov 2017 02:58:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/11/05/ObjectiveC%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E5%88%86%E6%9E%90/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/11/05/ObjectiveC%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E5%88%86%E6%9E%90/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>源码</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>synchronized实现原理</title>
+        <description>&lt;h1 id=&quot;synchronized实现原理&quot;&gt;@synchronized实现原理&lt;/h1&gt;
+&lt;p&gt;在iOS面试中，常常会问到锁的性能问题，对于@synchronized方式加锁,会的到认可的回答是，synchronized性能比较差，不建议使用。这个结论往往是通过测试得到，最近看了synchronized的runtime实现，希望从源码的角度分析为什么慢。&lt;/p&gt;
+
+&lt;p&gt;先给出结论：&lt;strong&gt;@synchronized持有的锁本质是递归锁，由于开发者使用@synchronized的时候不持有声明锁，这锁其实是由系统持有并维护的，锁的存取会耗费额外的时间。&lt;/strong&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;synchronized与runtime&quot;&gt;@synchronized与runtime&lt;/h2&gt;
+&lt;p&gt;先通过clang的-rewrite-objc将带有synchronized的的OC代码转换成C,OC代码如下&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int main(int argc, const char * argv[]) {
+    @autoreleasepool {
+        NSObject *obj = [NSObject new];
+        @synchronized(obj) {
+            NSLog(@&quot;sync log&quot;);
+        }
+    }
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;转换成C代码如下：&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int main(int argc, const char * argv[]) {
+    /* @autoreleasepool */ { __AtAutoreleasePool __autoreleasepool;
+        NSObject *obj = ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass(&quot;NSObject&quot;), sel_registerName(&quot;new&quot;));// NSObject *obj = [NSObject new];
+        {
+id _rethrow = 0; id _sync_obj = (id)obj; objc_sync_enter(_sync_obj);//调用objc_sync_enter方法，参数是生成的对象obj
+try {
+  	struct _SYNC_EXIT {
+      _SYNC_EXIT(id arg) : sync_exit(arg) {}
+  	  ~_SYNC_EXIT() {
+        objc_sync_exit(sync_exit);
+      }
+  	id sync_exit;
+    }
+    _sync_exit(_sync_obj);//为啥这用小写，感觉是转换问题，理论上不能这么用，看含义是生成局部变量，离开try block时被析构，调用objc_sync_exit函数，参数仍然是obj
+
+    NSLog((NSString *)&amp;amp;__NSConstantStringImpl__var_folders_yl_kqnznqhd4bb7gm2_sfxs1_j40000gn_T_synchronized_7ca75b_mi_0);
+       
+  } catch (id e) {_rethrow = e;} //cache了加解锁可能抛出的异常，重新付给_rethrow
+{ struct _FIN { _FIN(id reth) : rethrow(reth) {}
+	~_FIN() { if (rethrow) objc_exception_throw(rethrow); }
+	id rethrow;
+	} _fin_force_rethow(_rethrow);}
+} //析构时，调用objc_exception_throw抛出异常
+
+    }
+   }
+    return 0;
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;抛开大小写和奇怪的调用，@synchronized(obj)的过程可以看成是：&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;1、objc_sync_enter(obj)
+2、执行block代码
+3、objc_sync_exit(obj)
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;接下来看objc_sync_enter &amp;amp;  objc_sync_exit这两个函数是做什么的&lt;/p&gt;
+
+&lt;h2 id=&quot;objc_sync_enter---objc_sync_exit&quot;&gt;objc_sync_enter &amp;amp;  objc_sync_exit&lt;/h2&gt;
+
+&lt;p&gt;下面是objc_sync_enter &amp;amp;  objc_sync_exit的运行时代码（709.1）关键部分进行了注释&lt;/p&gt;
+
+&lt;p&gt;objc_sync_enter&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int objc_sync_enter(id obj)
+{
+    int result = OBJC_SYNC_SUCCESS;
+
+    if (obj) {
+        SyncData* data = id2data(obj, ACQUIRE); //调用id2data获取SyncData结构对象
+        assert(data); //如果是空就抛出异常异常
+        data-&amp;gt;mutex.lock();//最终的枷锁，查看SyncData结构可以发现mutex是一个递归锁
+    } else {
+        // @synchronized(nil) does nothing
+        if (DebugNilSync) {
+            _objc_inform(&quot;NIL SYNC DEBUG: @synchronized(nil); set a breakpoint on objc_sync_nil to debug&quot;);
+        }
+        objc_sync_nil();
+    }
+
+    return result;
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;objc_sync_exit&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;
+// End synchronizing on 'obj'.
+// Returns OBJC_SYNC_SUCCESS or OBJC_SYNC_NOT_OWNING_THREAD_ERROR
+int objc_sync_exit(id obj)
+{
+    int result = OBJC_SYNC_SUCCESS;
+   
+    if (obj) {
+        SyncData* data = id2data(obj, RELEASE);  //调用id2datas释放对obj的锁，同时返回SyncData对象
+        if (!data) {//找不到就返回错误
+            result = OBJC_SYNC_NOT_OWNING_THREAD_ERROR;
+        } else {
+            bool okay = data-&amp;gt;mutex.tryUnlock();//解锁
+            if (!okay) {
+                result = OBJC_SYNC_NOT_OWNING_THREAD_ERROR;
+            }
+        }
+    } else {
+        // @synchronized(nil) does nothing
+    }
+	
+
+    return result;
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;typedef struct SyncData {
+    struct SyncData* nextData;
+    DisguisedPtr&amp;lt;objc_object&amp;gt; object;
+    int32_t threadCount;  // number of THREADS using this block
+    recursive_mutex_t mutex;
+} SyncData;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;从上述加解锁的过程可以看出，synchronized是通过传入的obj获取到对应的SyncData，最终对SyncData中的递归锁进行操作，实现了同步。从obj到SyncData的转化就要看id2data的实现了。&lt;/p&gt;
+
+&lt;h2 id=&quot;id2data-找到对象对应的锁&quot;&gt;id2data-找到对象对应的锁&lt;/h2&gt;
+
+&lt;p&gt;代码如下&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static SyncData* id2data(id object, enum usage why)
+{
+    spinlock_t *lockp = &amp;amp;LOCK_FOR_OBJ(object);// LOCK_FOR_OBJ = sDataLists[obj].lock，从全局变量sDataLists中取出锁
+
+    SyncData **listp = &amp;amp;LIST_FOR_OBJ(object);
+    SyncData* result = NULL;
+
+#if SUPPORT_DIRECT_THREAD_KEYS
+//这一段是尝试从TLS中快速获取最新访问到的数据,如果发现所给obj和在TLS中存储的obj是同一个的话,更新对象被锁的计数值，并返回
+// 目前看到SUPPORT_DIRECT_THREAD_KEYS是 0因此并不会执行
+  // Check per-thread single-entry fast cache for matching object
+    bool fastCacheOccupied = NO;
+    SyncData *data = (SyncData *)tls_get_direct(SYNC_DATA_DIRECT_KEY);
+    if (data) { //判断取出的对象是否为空
+        fastCacheOccupied = YES;
+
+        if (data-&amp;gt;object == object) {//判断是否是同一个对象
+            // Found a match in fast cache.
+            uintptr_t lockCount;
+
+            result = data;
+            lockCount = (uintptr_t)tls_get_direct(SYNC_COUNT_DIRECT_KEY);//获得这个对象被锁定的次数
+            if (result-&amp;gt;threadCount &amp;lt;= 0  ||  lockCount &amp;lt;= 0) {
+                _objc_fatal(&quot;id2data fastcache is buggy&quot;);
+            }
+
+            switch(why) {
+            case ACQUIRE: {
+                lockCount++;
+                tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)lockCount);//重新搞回去
+                break;
+            }
+            case RELEASE:
+                lockCount--;
+                tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)lockCount);
+                if (lockCount == 0) {
+                    // remove from fast cache
+                    tls_set_direct(SYNC_DATA_DIRECT_KEY, NULL);//清空被锁的值
+                    // atomic because may collide with concurrent ACQUIRE
+                    OSAtomicDecrement32Barrier(&amp;amp;result-&amp;gt;threadCount);
+                }
+                break;
+            case CHECK:
+                // do nothing
+                break;
+            }
+
+            return result;
+        }
+    }
+#endif
+
+    // Check per-thread cache of already-owned locks for matching object
+    SyncCache *cache = fetch_cache(NO);//从缓存中查找这个对象是否存在
+    if (cache) { //如果能找到
+        unsigned int i;
+        for (i = 0; i &amp;lt; cache-&amp;gt;used; i++) {
+            SyncCacheItem *item = &amp;amp;cache-&amp;gt;list[i];
+            if (item-&amp;gt;data-&amp;gt;object != object) continue;
+
+            // Found a match.
+            result = item-&amp;gt;data;
+            if (result-&amp;gt;threadCount &amp;lt;= 0  ||  item-&amp;gt;lockCount &amp;lt;= 0) {
+                _objc_fatal(&quot;id2data cache is buggy&quot;);
+            }
+               
+            switch(why) {
+            case ACQUIRE://如果是获得锁操作，就给lockCount甲乙
+                item-&amp;gt;lockCount++;
+                break;
+            case RELEASE:
+                item-&amp;gt;lockCount--;
+                if (item-&amp;gt;lockCount == 0) {
+                    // remove from per-thread cache
+                    cache-&amp;gt;list[i] = cache-&amp;gt;list[--cache-&amp;gt;used];//更新缓存对象的使用状态
+                    // atomic because may collide with concurrent ACQUIRE
+                    OSAtomicDecrement32Barrier(&amp;amp;result-&amp;gt;threadCount);
+                }
+                break;
+            case CHECK:
+                // do nothing
+                break;
+            }
+
+            return result;
+        }
+    }
+
+    // Thread cache didn't find anything.
+    // Walk in-use list looking for matching object
+    // Spinlock prevents multiple threads from creating multiple
+    // locks for the same new object.
+    // We could keep the nodes in some hash table if we find that there are
+    // more than 20 or so distinct locks active, but we don't do that now.
+   
+    lockp-&amp;gt;lock();//上面的解释比较清楚了，在缓存中也没找到，就遍历sDataLists查找或者新生成一个SyncData对象，并添加到sDataLists中，因此需要锁定sDataLists的这一列
+
+    {
+        SyncData* p;
+        SyncData* firstUnused = NULL;
+        for (p = *listp; p != NULL; p = p-&amp;gt;nextData) {
+            if ( p-&amp;gt;object == object ) {//查找看是否存在
+                result = p;
+                // atomic because may collide with concurrent RELEASE
+                OSAtomicIncrement32Barrier(&amp;amp;result-&amp;gt;threadCount);//更新正在使用该锁的线程数
+                goto done;
+            }
+            if ( (firstUnused == NULL) &amp;amp;&amp;amp; (p-&amp;gt;threadCount == 0) )
+                firstUnused = p;
+        }
+   
+        // no SyncData currently associated with object
+        if ( (why == RELEASE) || (why == CHECK) )
+            goto done;
+   
+        // an unused one was found, use it
+        if ( firstUnused != NULL ) {//找到了一个已经在sDataLists中的但没有正在使用的SyncData对象，避免直接生成，而是将object指向传入值后并标记线程数为1，进行使用
+            result = firstUnused;
+            result-&amp;gt;object = (objc_object *)object;
+            result-&amp;gt;threadCount = 1;
+            goto done;
+        }
+    }
+
+    // malloc a new SyncData and add to list.
+    // XXX calling malloc with a global lock held is bad practice,
+    // might be worth releasing the lock, mallocing, and searching again.
+    // But since we never free these guys we won't be stuck in malloc very often.
+    result = (SyncData*)calloc(sizeof(SyncData), 1);
+    result-&amp;gt;object = (objc_object *)object;
+    result-&amp;gt;threadCount = 1;
+    new (&amp;amp;result-&amp;gt;mutex) recursive_mutex_t(fork_unsafe_lock);
+    result-&amp;gt;nextData = *listp;
+    *listp = result;
+   
+ done:
+    lockp-&amp;gt;unlock();//sDataLists的数据操作结束了，把锁解开
+    if (result) {
+        // Only new ACQUIRE should get here.
+        // All RELEASE and CHECK and recursive ACQUIRE are
+        // handled by the per-thread caches above.
+        if (why == RELEASE) {
+            // Probably some thread is incorrectly exiting
+            // while the object is held by another thread.
+            return nil;
+        }
+        if (why != ACQUIRE) _objc_fatal(&quot;id2data is buggy&quot;);
+        if (result-&amp;gt;object != object) _objc_fatal(&quot;id2data is buggy&quot;);
+
+#if SUPPORT_DIRECT_THREAD_KEYS
+        if (!fastCacheOccupied) {//更新TLS
+            // Save in fast thread cache
+            tls_set_direct(SYNC_DATA_DIRECT_KEY, result);
+            tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)1);
+        } else
+#endif
+        {
+            // Save in thread cache
+            if (!cache) cache = fetch_cache(YES);//更新缓存
+            cache-&amp;gt;list[cache-&amp;gt;used].data = result;
+            cache-&amp;gt;list[cache-&amp;gt;used].lockCount = 1;
+            cache-&amp;gt;used++;
+        }
+    }
+
+    return result;
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;可以看到所有的同步对象都由 &lt;em&gt;StripedMap&amp;lt;T&amp;gt;&lt;/em&gt; 这个类进行管理，&lt;em&gt;StripedMap&amp;lt;T&amp;gt;&lt;/em&gt;是objective -C runtime中定义的一种底层结构，实现了一种类似斑马线的结构，一共分了8条线，每个对象根据自己的内存地址被映射到不同的线上，每条线由一个锁控制，这么做的目的是尽可能的减少锁竞争（先挖个坑，之后会补充一篇StripedMap&amp;lt;T&amp;gt;的blog）&lt;/p&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;从上面的同步过程可以看到&lt;strong&gt;synchronized加锁本质是递归锁，SyncData这个结构将对象和递归锁绑定，StripedMap&amp;lt;T&amp;gt;这个全局结构维护了所有锁，尽管为了提高性能苹果大量的使用了TLS缓存，但比起直接用互斥锁或者递归锁进行加锁，对每个新对象都需要锁住StripedMap&amp;lt;T&amp;gt;的某条line,引入了一道加锁，同时还可能引起锁竞争，因此性能会比直接用锁差&lt;/strong&gt;
+但比较明显的好处是不需要显式维护锁对象，代码阅读上清爽了不少。&lt;/p&gt;
+
+</description>
+        <pubDate>Sun, 29 Oct 2017 01:40:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/10/29/synchronized%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/10/29/synchronized%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>源码阅读</category>
+        
+        <category>多线程</category>
+        
+        <category>sychronized</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>PINCache源码阅读</title>
+        <description>&lt;h1 id=&quot;pincache源码阅读&quot;&gt;PINCache源码阅读&lt;/h1&gt;
+
+&lt;h2 id=&quot;overview&quot;&gt;Overview&lt;/h2&gt;
+
+&lt;p&gt;&lt;em&gt;PINCache&lt;/em&gt; &lt;a href=&quot;https://github.com/pinterest/PINCache.git&quot;&gt;https://github.com/pinterest/PINCache.git&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;PINCache&lt;/strong&gt;是对&lt;strong&gt;TMCache&lt;/strong&gt;的一个fork,主要修复了其中的线程安全问题。
+在阅读源码的过程中，发现PINCache使用了键值存取技术，并且自己维护了一组多线程并发，下面会从这两个方面分析源码，最后介绍PINCache暴露出的主接口。&lt;/p&gt;
+
+&lt;h2 id=&quot;下标存取ojbect-subscriping&quot;&gt;下标存取（Ojbect subscriping）&lt;/h2&gt;
+
+&lt;p&gt;在开发过程中我们常常会写出下面的代码：&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;NSArray *array = @[1,2,3];
+NSNubmer *one = array[1]; // 1
+
+NSDictioanry *friend = @{@&quot;li&quot;:@&quot;han&quot;, @&quot;zhang&quot;:@&quot;xiao&quot;};
+NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;对NSArray, NSDictionary的对象使用了&lt;code class=&quot;highlighter-rouge&quot;&gt;[]&lt;/code&gt;直接存取，这种存取方式就叫做&lt;strong&gt;Object Subscriping&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;Clang6支持两类subscripting访问， array-style(整数访问) ,dictionary-style（对象访问），当使用下标访问时，会调用对应的方法，一个类可以同时支持整数/对象下标访问。&lt;/p&gt;
+
+&lt;p&gt;整数下标访问需要声明并实现 整数访问支持全部正负整数&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (nullable id)objectAtIndexedSubscript:(NSInteger)number
+- (void)setObject:(id)object atIndexedSubscript:(NSInteger)number  
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;字典下标访问对应&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (nullable id)objectForKeyedSubscript:(id)subscript
+- (void)setObject::(id)object forKeyedSubscript:(id)subscript 
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;strong&gt;PINCache&lt;/strong&gt;定义了PINCacheObjectSubscripting协议(声明了字典下标访问接口)，通过让PINCache/PINMemoryCache/PINDiskCache服从并实现该协议实现了下标访问。&lt;/p&gt;
+
+&lt;h2 id=&quot;多线程处理&quot;&gt;多线程处理&lt;/h2&gt;
+
+&lt;p&gt;为了更高效的存取数据，PINCache提供了异步访问接口，并维护了一套线程处理类。&lt;/p&gt;
+
+&lt;h3 id=&quot;pinoperationqueue&quot;&gt;PINOperationQueue&lt;/h3&gt;
+&lt;p&gt;实现了一个类似于系统队列的类，顺序处理放进去的操作
+保证在不设置并行变量的情况下，顺序执行，否则并行执行。
+主要操作有:&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (id &amp;lt;PINOperationReference&amp;gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
+
+- (id &amp;lt;PINOperationReference&amp;gt;)addOperation:(dispatch_block_t)block withPriority:(PINOperationQueuePriority)priority
+{
+  PINOperation *operation = [PINOperation operationWithBlock:^(id data) { block(); } //根据传入的block生成一个operation对象（包含动作本身，优先级，reference
+                                                   reference:[self nextOperationReference]
+                                                    priority:priority
+                                                  identifier:nil
+                                                        data:nil
+                                                  completion:nil];
+  [self lock];
+    [self locked_addOperation:operation]; //把这个操作添加到全局操作队列和对应优先级的队列中
+  [self unlock];
+  
+  [self scheduleNextOperations:NO]; //执行操作，具体如下
+  
+  return operation.reference;
+}
+）
+
+- (void)scheduleNextOperations:(BOOL)onlyCheckSerial
+{
+  [self lock];
+  
+    //get next available operation in order, ignoring priority and run it on the serial queue
+    if (_serialQueueBusy == NO) {
+      PINOperation *operation = [self locked_nextOperationByQueue]; //在_queuedOperations队列中取出第一个operation，并从_queuedOperations队列及优先级队列移除该操作
+      if (operation) {
+        _serialQueueBusy = YES; //标志正在往串行queue中放入任务
+        dispatch_async(_serialQueue, ^{
+          operation.block(operation.data); //执行传入的block
+          for (dispatch_block_t completion in operation.completions) {
+            completion();
+          }
+          dispatch_group_leave(_group);
+          
+          [self lock];
+            _serialQueueBusy = NO;
+          [self unlock];
+          
+          //see if there are any other operations
+          [self scheduleNextOperations:YES]; // 继续取出所有在_queuedOperations中的任务（感觉并没有必要，因为毕竟一次只能放入一个任务啊）
+        });
+      }
+    }
+  
+  NSInteger maxConcurrentOperations = _maxConcurrentOperations;
+  
+  [self unlock];
+  
+  if (onlyCheckSerial) {
+    return;
+  }
+
+  //if only one concurrent operation is set, let's just use the serial queue for executing it
+  if (maxConcurrentOperations &amp;lt; 2) { //看看是不是允许并发执行，
+    return;
+  }
+  //当前一个任务还没执行完，又放入了新任务时，允许并发执行
+  dispatch_async(_semaphoreQueue, ^{
+    dispatch_semaphore_wait(_concurrentSemaphore, DISPATCH_TIME_FOREVER);//并发任务数由_concurrentSemaphore决定
+    [self lock]; //防止一个operation被多次取出
+      PINOperation *operation = [self locked_nextOperationByPriority]; //按优先级取出优先级最高的任务
+    [self unlock];
+  
+    if (operation) {
+      dispatch_async(_concurrentQueue, ^{
+        operation.block(operation.data);
+        for (dispatch_block_t completion in operation.completions) {
+          completion();
+        }
+        dispatch_group_leave(_group);
+        dispatch_semaphore_signal(_concurrentSemaphore);
+      });
+    } else {
+      dispatch_semaphore_signal(_concurrentSemaphore);
+    }
+  });
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;pinoperationgroup&quot;&gt;PINOperationGroup&lt;/h3&gt;
+
+&lt;p&gt;支持addOperation添加操作进Group,并start,执行所有block,如果有completion回调时，会在所有任务执行完之后回调该函数。
+这个类看起来和系统提供的group没有太大区别，不太清楚为什么要自己定制。&lt;/p&gt;
+
+&lt;h2 id=&quot;缓存类&quot;&gt;缓存类&lt;/h2&gt;
+
+&lt;p&gt;缓存类有PINCache/PINMemoryCache/PINDiskCache 并无继承关系&lt;/p&gt;
+
+&lt;h3 id=&quot;pincache&quot;&gt;PINCache&lt;/h3&gt;
+
+&lt;p&gt;PINCache中包含了PINMemoryCache，PINDiskCache，执行将内存缓存异步同步到硬盘缓存的操作，如下&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//异步读取
+- (void)objectForKeyAsync:(NSString *)key completion:(PINCacheObjectBlock)block
+{
+    if (!key || !block)
+        return;
+    
+    __weak PINCache *weakSelf = self;
+    
+    [self.operationQueue addOperation:^{
+        PINCache *strongSelf = weakSelf;
+        if (!strongSelf)
+            return;
+        [strongSelf-&amp;gt;_memoryCache objectForKeyAsync:key completion:^(PINMemoryCache *memoryCache, NSString *memoryCacheKey, id memoryCacheObject) {//优先查找内存缓存
+            PINCache *strongSelf = weakSelf;
+            if (!strongSelf)
+                return;
+            
+            if (memoryCacheObject) {
+                // Update file modification date. TODO: make this a separate method?
+                [strongSelf-&amp;gt;_diskCache fileURLForKeyAsync:memoryCacheKey completion:^(NSString * _Nonnull key, NSURL * _Nullable fileURL) {}];//如果存在内存缓存，更新下问价缓存的访问时间
+                [strongSelf-&amp;gt;_operationQueue addOperation:^{
+                    PINCache *strongSelf = weakSelf;
+                    if (strongSelf)
+                        block(strongSelf, memoryCacheKey, memoryCacheObject);
+                }];
+            } else {
+                [strongSelf-&amp;gt;_diskCache objectForKeyAsync:memoryCacheKey completion:^(PINDiskCache *diskCache, NSString *diskCacheKey, id &amp;lt;NSCoding&amp;gt; diskCacheObject) {//不存在硬盘缓存，从硬盘缓存中读取，
+                    PINCache *strongSelf = weakSelf;
+                    if (!strongSelf)
+                        return;
+                    
+                    [strongSelf-&amp;gt;_memoryCache setObjectAsync:diskCacheObject forKey:diskCacheKey completion:nil]; //更细内存缓存
+                    
+                    [strongSelf-&amp;gt;_operationQueue addOperation:^{
+                        PINCache *strongSelf = weakSelf;
+                        if (strongSelf)
+                            block(strongSelf, diskCacheKey, diskCacheObject); //回调
+                    }];
+                }];
+            }
+        }];
+    }];
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//异步设置
+- (void)setObjectAsync:(id &amp;lt;NSCoding&amp;gt;)object forKey:(NSString *)key withCost:(NSUInteger)cost completion:(PINCacheObjectBlock)block
+{
+    if (!key || !object)
+        return;
+  
+    PINOperationGroup *group = [PINOperationGroup asyncOperationGroupWithQueue:_operationQueue]; //生成操作组
+    
+    [group addOperation:^{
+        [_memoryCache setObject:object forKey:key withCost:cost]; //设置内存缓存
+    }];
+    [group addOperation:^{
+        [_diskCache setObject:object forKey:key]; //设置硬盘缓存
+    }];
+  
+    if (block) {
+        [group setCompletion:^{
+            block(self, key, object); //设置完毕后回调
+        }];
+    }
+    
+    [group start];
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;pinmemorycache&quot;&gt;PINMemoryCache&lt;/h3&gt;
+
+&lt;p&gt;支持下标存取，提供声明周期的各种回调方法，提供异步存取方法，持有一个PINOperationqueue保存，移除键值对时，向Queue中添加一个对应的operation（这怎么保证线程安全？）&lt;/p&gt;
+
+&lt;h3 id=&quot;pindiskcache&quot;&gt;PINDiskCache&lt;/h3&gt;
+
+&lt;p&gt;diskCache操作和MemoryCache类似，不过操作对象变成了文件，每个key对应一个文件路径（使用NSKeydArchiver序列化对象）&lt;/p&gt;
+
+&lt;h2 id=&quot;ref&quot;&gt;Ref&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;http://clang.llvm.org/docs/ObjectiveCLiterals.html&quot;&gt;http://clang.llvm.org/docs/ObjectiveCLiterals.html&lt;/a&gt;&lt;/p&gt;
+
+</description>
+        <pubDate>Mon, 23 Oct 2017 17:18:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>源码阅读</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>iOS开发技能树整理</title>
+        <description>&lt;h1 id=&quot;ios开发技能树整理&quot;&gt;iOS开发技能树整理&lt;/h1&gt;
+
+&lt;p&gt;最近一大波事情忙完，突然闲下来，简单的整理了一下iOS开发相关的技能树。&lt;/p&gt;
+
+&lt;p&gt;计划以后不断更新，点亮这颗技能树。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/raw/master/img/blog/2017.03.21/iOS_tech_tree.png&quot; alt=&quot;我的技能树&quot; /&gt;&lt;/p&gt;
+
+</description>
+        <pubDate>Tue, 21 Mar 2017 19:28:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        
+      </item>
     
       <item>
         <title>有关浮点数的那些事</title>
-        <description>&lt;h1 id=&quot;section&quot;&gt;有关浮点数的那些事&lt;/h1&gt;
+        <description>&lt;h1 id=&quot;有关浮点数的那些事&quot;&gt;有关浮点数的那些事&lt;/h1&gt;
 
-&lt;h2 id=&quot;section-1&quot;&gt;几个小问题&lt;/h2&gt;
+&lt;h2 id=&quot;几个小问题&quot;&gt;几个小问题&lt;/h2&gt;
 
 &lt;ol&gt;
   &lt;li&gt;浮点数可以准确表示0吗？&lt;/li&gt;
@@ -22,7 +1209,7 @@
   &lt;li&gt;下面两段代码的运行速度如何&lt;/li&gt;
 &lt;/ol&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
    const float z = 1.111;
    float y = x;
    for(int j = 0; j &amp;lt; 10000000; j++)
@@ -33,10 +1220,9 @@
        y -= 0;
    }
    return 0;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
    const float z = 1.111;
    float y = x;
    for(int j = 0; j &amp;lt; 10000000; j++)
@@ -46,11 +1232,10 @@
        y += 0.1;
        y -= 0.1;
    }
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;本文会从浮点数的表示方法入手回答一下上面的几个问题。&lt;/p&gt;
 
-&lt;h2 id=&quot;section-2&quot;&gt;浮点数的表示方法&lt;/h2&gt;
+&lt;h2 id=&quot;浮点数的表示方法&quot;&gt;浮点数的表示方法&lt;/h2&gt;
 
 &lt;p&gt;IEEE-754对浮点数的定义如下&lt;/p&gt;
 
@@ -184,14 +1369,13 @@
 
 &lt;p&gt;从上述定义中可以回答第一个问题：&lt;strong&gt;浮点数可以精确表示0&lt;/strong&gt;，用代码验证即&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float zero1 = 0.0;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float zero1 = 0.0;
 float zero2 = 0.0;
 if (zero1 == zero2) 
 {
 	printf(@&quot;zero1 = zero2&quot;); //must setup in if block
 }
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;总结&lt;strong&gt;浮点数定义的规律&lt;/strong&gt;如下：&lt;/p&gt;
 
@@ -215,14 +1399,13 @@ if (zero1 == zero2)
   &lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;h2 id=&quot;section-3&quot;&gt;浮点数的精度&lt;/h2&gt;
+&lt;h2 id=&quot;浮点数的精度&quot;&gt;浮点数的精度&lt;/h2&gt;
 
 &lt;p&gt;浮点数的精度宏FLT_EPSILON = 1.19092896-e7。
 IEEE对FLT_EPSILON的定义为&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;再回到上一章看浮点数，1.0 = 指数位和数字为都为0的数，即&lt;/p&gt;
 
@@ -262,25 +1445,24 @@ IEEE对FLT_EPSILON的定义为&lt;/p&gt;
 
 &lt;p&gt;另外，2&lt;sup&gt;-23&lt;/sup&gt; 也代表了浮点数类型能够精确表示的最小一位数，我想把这个值作为浮点数的精度也有这方面的考虑。&lt;/p&gt;
 
-&lt;h2 id=&quot;section-4&quot;&gt;浮点数的比较&lt;/h2&gt;
+&lt;h2 id=&quot;浮点数的比较&quot;&gt;浮点数的比较&lt;/h2&gt;
 
 &lt;p&gt;首先明确一点，所有浮点数的比较都是通过逐一对比比特的方式进行。&lt;/p&gt;
 
 &lt;p&gt;因此，两个比特位完全一致，用&lt;code class=&quot;highlighter-rouge&quot;&gt;==&lt;/code&gt;判断完全可行。
 如&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float a = 0.5;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float a = 0.5;
 float b = 0.5;
 if (a == b)
 {
 	printf(&quot;isEqual&quot;);\\does executed
 }
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用&lt;code class=&quot;highlighter-rouge&quot;&gt;==&lt;/code&gt;,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float y = 1000000.3;
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float y = 1000000.3;
 float x = 0.3;
 float k = 1000000;
 float z = y-k-x;
@@ -291,8 +1473,7 @@ z = y-x-k;
 if (fabsf(z) &amp;lt; FLT_EPSILON) {
     NSLog(@&quot;Z &amp;lt; FLT_EPSILON&quot;); \\only this executed
 }
-&lt;/code&gt;&lt;/pre&gt;
-&lt;/div&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;直觉上执行&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k-x&lt;/code&gt;也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。&lt;/p&gt;
 
@@ -302,7 +1483,7 @@ if (fabsf(z) &amp;lt; FLT_EPSILON) {
 
 &lt;p&gt;对精度要求不高的地方用一用无妨，关键数据一定要用整数类型.&lt;/p&gt;
 
-&lt;h2 id=&quot;denormalized-float&quot;&gt;非规格化浮点数（Denormalized float）&lt;/h2&gt;
+&lt;h2 id=&quot;非规格化浮点数denormalized-float&quot;&gt;非规格化浮点数（Denormalized float）&lt;/h2&gt;
 
 &lt;p&gt;对于问题4,相信很多同学会认为+/-0 计算量较小，对运算速度影响小，然而实际测试结果却不是。导致低一段代码性能低的原因为，不断地 y*x/z产生了非规格化浮点数， 而在+/-0的情况下，之后的运算都是Denormalized float之间的运算&lt;/p&gt;
 
@@ -316,14 +1497,14 @@ if (fabsf(z) &amp;lt; FLT_EPSILON) {
 
 &lt;p&gt;而非规格化浮点数为了增加对更小的数字的支持，打破了小数点前一位为1的限制，即将浮点数的表示范围增加了23位（二进制下）。&lt;/p&gt;
 
-&lt;h2 id=&quot;section-5&quot;&gt;结语&lt;/h2&gt;
+&lt;h2 id=&quot;结语&quot;&gt;结语&lt;/h2&gt;
 
 &lt;p&gt;关于浮点数的那些事到这结束啦，欢迎大家一起讨论~&lt;/p&gt;
 
 </description>
         <pubDate>Fri, 21 Oct 2016 05:00:00 +0800</pubDate>
-        <link>/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</link>
-        <guid isPermaLink="true">/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</guid>
+        <link>http://localhost:4000/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</link>
+        <guid isPermaLink="true">http://localhost:4000/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</guid>
         
         <category>技术</category>
         
