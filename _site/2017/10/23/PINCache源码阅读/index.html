@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="xBT4GhYoi5qRD5tr338pgPM5OWHHIDR6mNg1a3euekI" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="iOS 开发分享">
+    <meta name="keywords"  content="dingjingpisces2015">
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>PINCache源码阅读 - D Tech Blog</title>
+
+    <link rel="canonical" href="http://localhost:4000/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/hux-blog.min.css">
+
+    <!-- Pygments Github CSS -->
+    <link rel="stylesheet" href="/css/syntax.css">
+
+    <!-- Custom Fonts -->
+    <!-- <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"> -->
+    <!-- Hux change font-awesome CDN to qiniu -->
+    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+
+    <!-- Hux Delete, sad but pending in China
+    <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800' rel='stylesheet' type='text/
+    css'>
+    -->
+
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    <!-- Navigation -->
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+    <div class="container-fluid">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">D Tech Blog</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">Home</a>
+                    </li>
+                    
+                    <li>
+                        <a href="/about/">About</a>
+                    </li>
+                    
+                    <li>
+                        <a href="/tags/">Tags</a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+    <!-- /.container -->
+</nav>
+<script>
+    // Drop Bootstarp low-performance Navbar
+    // Use customize navbar with high-quality material design animation
+    // in high-perf jank-free CSS3 implementation
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    var __HuxNav__ = {
+        close: function(){
+            $navbar.className = " ";
+            // wait until animation end.
+            setTimeout(function(){
+                // prevent frequently toggle
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        },
+        open: function(){
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+
+    // Bind Event
+    $toggle.addEventListener('click', function(e){
+        if ($navbar.className.indexOf('in') > 0) {
+            __HuxNav__.close()
+        }else{
+            __HuxNav__.open()
+        }
+    })
+
+    /**
+     * Since Fastclick is used to delegate 'touchstart' globally
+     * to hack 300ms delay in iOS by performing a fake 'click',
+     * Using 'e.stopPropagation' to stop 'touchstart' event from 
+     * $toggle/$collapse will break global delegation.
+     * 
+     * Instead, we use a 'e.target' filter to prevent handler
+     * added to document close HuxNav.  
+     *
+     * Also, we use 'click' instead of 'touchstart' as compromise
+     */
+    document.addEventListener('click', function(e){
+        if(e.target == $toggle) return;
+        if(e.target.className == 'icon-bar') return;
+        __HuxNav__.close();
+    })
+</script>
+
+
+    <!-- Image to hack wechat -->
+<!-- <img src="/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="/img/post-bg-2015.jpg" width="0" height="0"> -->
+
+<!-- Post Header -->
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/img/post-bg-2015.jpg')
+    }
+
+    
+</style>
+<header class="intro-header" >
+    <div class="header-mask"></div>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/#技术" title="技术">技术</a>
+                        
+                        <a class="tag" href="/tags/#iOS开发" title="iOS开发">iOS开发</a>
+                        
+                        <a class="tag" href="/tags/#源码阅读" title="源码阅读">源码阅读</a>
+                        
+                    </div>
+                    <h1>PINCache源码阅读</h1>
+                    
+                    
+                    <h2 class="subheading"></h2>
+                    
+                    <span class="meta">Posted by dingjingpisces on October 23, 2017</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+                <span class="meta" id="copyright"></span>
+                <script> document.getElementById("copyright").innerHTML = "文章欢迎转载，但转载时请保留本段文字，并置于文章的顶部 作者：dingjingpisces 本文原文地址:" + decodeURI(window.location.href)</script>
+				<h1 id="pincache源码阅读">PINCache源码阅读</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p><em>PINCache</em> <a href="https://github.com/pinterest/PINCache.git">https://github.com/pinterest/PINCache.git</a></p>
+
+<p><strong>PINCache</strong>是对<strong>TMCache</strong>的一个fork,主要修复了其中的线程安全问题。
+在阅读源码的过程中，发现PINCache使用了键值存取技术，并且自己维护了一组多线程并发，下面会从这两个方面分析源码，最后介绍PINCache暴露出的主接口。</p>
+
+<h2 id="下标存取ojbect-subscriping">下标存取（Ojbect subscriping）</h2>
+
+<p>在开发过程中我们常常会写出下面的代码：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>NSArray *array = @[1,2,3];
+NSNubmer *one = array[1]; // 1
+
+NSDictioanry *friend = @{@"li":@"han", @"zhang":@"xiao"};
+NSString *li = name[@"li"] //@"han"
+</code></pre></div></div>
+<p>对NSArray, NSDictionary的对象使用了<code class="highlighter-rouge">[]</code>直接存取，这种存取方式就叫做<strong>Object Subscriping</strong>.</p>
+
+<p>Clang6支持两类subscripting访问， array-style(整数访问) ,dictionary-style（对象访问），当使用下标访问时，会调用对应的方法，一个类可以同时支持整数/对象下标访问。</p>
+
+<p>整数下标访问需要声明并实现 整数访问支持全部正负整数</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectAtIndexedSubscript:(NSInteger)number
+- (void)setObject:(id)object atIndexedSubscript:(NSInteger)number  
+</code></pre></div></div>
+
+<p>字典下标访问对应</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectForKeyedSubscript:(id)subscript
+- (void)setObject::(id)object forKeyedSubscript:(id)subscript 
+</code></pre></div></div>
+
+<p><strong>PINCache</strong>定义了PINCacheObjectSubscripting协议(声明了字典下标访问接口)，通过让PINCache/PINMemoryCache/PINDiskCache服从并实现该协议实现了下标访问。</p>
+
+<h2 id="多线程处理">多线程处理</h2>
+
+<p>为了更高效的存取数据，PINCache提供了异步访问接口，并维护了一套线程处理类。</p>
+
+<h3 id="pinoperationqueue">PINOperationQueue</h3>
+<p>实现了一个类似于系统队列的类，顺序处理放进去的操作
+保证在不设置并行变量的情况下，顺序执行，否则并行执行。
+主要操作有:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
+
+- (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)block withPriority:(PINOperationQueuePriority)priority
+{
+  PINOperation *operation = [PINOperation operationWithBlock:^(id data) { block(); } //根据传入的block生成一个operation对象（包含动作本身，优先级，reference
+                                                   reference:[self nextOperationReference]
+                                                    priority:priority
+                                                  identifier:nil
+                                                        data:nil
+                                                  completion:nil];
+  [self lock];
+    [self locked_addOperation:operation]; //把这个操作添加到全局操作队列和对应优先级的队列中
+  [self unlock];
+  
+  [self scheduleNextOperations:NO]; //执行操作，具体如下
+  
+  return operation.reference;
+}
+）
+
+- (void)scheduleNextOperations:(BOOL)onlyCheckSerial
+{
+  [self lock];
+  
+    //get next available operation in order, ignoring priority and run it on the serial queue
+    if (_serialQueueBusy == NO) {
+      PINOperation *operation = [self locked_nextOperationByQueue]; //在_queuedOperations队列中取出第一个operation，并从_queuedOperations队列及优先级队列移除该操作
+      if (operation) {
+        _serialQueueBusy = YES; //标志正在往串行queue中放入任务
+        dispatch_async(_serialQueue, ^{
+          operation.block(operation.data); //执行传入的block
+          for (dispatch_block_t completion in operation.completions) {
+            completion();
+          }
+          dispatch_group_leave(_group);
+          
+          [self lock];
+            _serialQueueBusy = NO;
+          [self unlock];
+          
+          //see if there are any other operations
+          [self scheduleNextOperations:YES]; // 继续取出所有在_queuedOperations中的任务（感觉并没有必要，因为毕竟一次只能放入一个任务啊）
+        });
+      }
+    }
+  
+  NSInteger maxConcurrentOperations = _maxConcurrentOperations;
+  
+  [self unlock];
+  
+  if (onlyCheckSerial) {
+    return;
+  }
+
+  //if only one concurrent operation is set, let's just use the serial queue for executing it
+  if (maxConcurrentOperations &lt; 2) { //看看是不是允许并发执行，
+    return;
+  }
+  //当前一个任务还没执行完，又放入了新任务时，允许并发执行
+  dispatch_async(_semaphoreQueue, ^{
+    dispatch_semaphore_wait(_concurrentSemaphore, DISPATCH_TIME_FOREVER);//并发任务数由_concurrentSemaphore决定
+    [self lock]; //防止一个operation被多次取出
+      PINOperation *operation = [self locked_nextOperationByPriority]; //按优先级取出优先级最高的任务
+    [self unlock];
+  
+    if (operation) {
+      dispatch_async(_concurrentQueue, ^{
+        operation.block(operation.data);
+        for (dispatch_block_t completion in operation.completions) {
+          completion();
+        }
+        dispatch_group_leave(_group);
+        dispatch_semaphore_signal(_concurrentSemaphore);
+      });
+    } else {
+      dispatch_semaphore_signal(_concurrentSemaphore);
+    }
+  });
+}
+
+</code></pre></div></div>
+
+<h3 id="pinoperationgroup">PINOperationGroup</h3>
+
+<p>支持addOperation添加操作进Group,并start,执行所有block,如果有completion回调时，会在所有任务执行完之后回调该函数。
+这个类看起来和系统提供的group没有太大区别，不太清楚为什么要自己定制。</p>
+
+<h2 id="缓存类">缓存类</h2>
+
+<p>缓存类有PINCache/PINMemoryCache/PINDiskCache 并无继承关系</p>
+
+<h3 id="pincache">PINCache</h3>
+
+<p>PINCache中包含了PINMemoryCache，PINDiskCache，执行将内存缓存异步同步到硬盘缓存的操作，如下</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步读取
+- (void)objectForKeyAsync:(NSString *)key completion:(PINCacheObjectBlock)block
+{
+    if (!key || !block)
+        return;
+    
+    __weak PINCache *weakSelf = self;
+    
+    [self.operationQueue addOperation:^{
+        PINCache *strongSelf = weakSelf;
+        if (!strongSelf)
+            return;
+        [strongSelf-&gt;_memoryCache objectForKeyAsync:key completion:^(PINMemoryCache *memoryCache, NSString *memoryCacheKey, id memoryCacheObject) {//优先查找内存缓存
+            PINCache *strongSelf = weakSelf;
+            if (!strongSelf)
+                return;
+            
+            if (memoryCacheObject) {
+                // Update file modification date. TODO: make this a separate method?
+                [strongSelf-&gt;_diskCache fileURLForKeyAsync:memoryCacheKey completion:^(NSString * _Nonnull key, NSURL * _Nullable fileURL) {}];//如果存在内存缓存，更新下问价缓存的访问时间
+                [strongSelf-&gt;_operationQueue addOperation:^{
+                    PINCache *strongSelf = weakSelf;
+                    if (strongSelf)
+                        block(strongSelf, memoryCacheKey, memoryCacheObject);
+                }];
+            } else {
+                [strongSelf-&gt;_diskCache objectForKeyAsync:memoryCacheKey completion:^(PINDiskCache *diskCache, NSString *diskCacheKey, id &lt;NSCoding&gt; diskCacheObject) {//不存在硬盘缓存，从硬盘缓存中读取，
+                    PINCache *strongSelf = weakSelf;
+                    if (!strongSelf)
+                        return;
+                    
+                    [strongSelf-&gt;_memoryCache setObjectAsync:diskCacheObject forKey:diskCacheKey completion:nil]; //更细内存缓存
+                    
+                    [strongSelf-&gt;_operationQueue addOperation:^{
+                        PINCache *strongSelf = weakSelf;
+                        if (strongSelf)
+                            block(strongSelf, diskCacheKey, diskCacheObject); //回调
+                    }];
+                }];
+            }
+        }];
+    }];
+}
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步设置
+- (void)setObjectAsync:(id &lt;NSCoding&gt;)object forKey:(NSString *)key withCost:(NSUInteger)cost completion:(PINCacheObjectBlock)block
+{
+    if (!key || !object)
+        return;
+  
+    PINOperationGroup *group = [PINOperationGroup asyncOperationGroupWithQueue:_operationQueue]; //生成操作组
+    
+    [group addOperation:^{
+        [_memoryCache setObject:object forKey:key withCost:cost]; //设置内存缓存
+    }];
+    [group addOperation:^{
+        [_diskCache setObject:object forKey:key]; //设置硬盘缓存
+    }];
+  
+    if (block) {
+        [group setCompletion:^{
+            block(self, key, object); //设置完毕后回调
+        }];
+    }
+    
+    [group start];
+}
+</code></pre></div></div>
+
+<h3 id="pinmemorycache">PINMemoryCache</h3>
+
+<p>支持下标存取，提供声明周期的各种回调方法，提供异步存取方法，持有一个PINOperationqueue保存，移除键值对时，向Queue中添加一个对应的operation（这怎么保证线程安全？）</p>
+
+<h3 id="pindiskcache">PINDiskCache</h3>
+
+<p>diskCache操作和MemoryCache类似，不过操作对象变成了文件，每个key对应一个文件路径（使用NSKeydArchiver序列化对象）</p>
+
+<h2 id="ref">Ref</h2>
+
+<p><a href="http://clang.llvm.org/docs/ObjectiveCLiterals.html">http://clang.llvm.org/docs/ObjectiveCLiterals.html</a></p>
+
+
+
+                <hr>
+
+                
+                <!-- 多说 Share start -->
+                </style>
+                <div class="ds-share"
+                    style="text-align: right"
+                    data-thread-key="/2017/10/23/PINCache源码阅读"
+                    data-title="PINCache源码阅读"
+                    data-url="http://localhost:4000/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/"
+                    data-images="http://localhost:4000/img/post-bg-2015.jpg"
+                    data-content="PINCache源码阅读
+
+Overview
+
+PINCache https://github.com/pinterest/PINCache.git
+
+P... | D Tech Blog " >
+                    <div class="ds-share-inline">
+                      <ul  class="ds-share-icons-16">
+                        <li data-toggle="ds-share-icons-more"><a class="ds-more" href="#">分享到：</a></li>
+                        <li><a class="ds-wechat flat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+                        <li><a class="ds-weibo flat" href="javascript:void(0);" data-service="weibo">微博</a></li>
+                        <li><a class="ds-douban flat" href="javascript:void(0);" data-service="douban">豆瓣</a></li>
+                      </ul>
+                      <div class="ds-share-icons-more">
+                      </div>
+                    </div>
+                <hr>
+                </div>
+                <!-- 多说 Share end-->
+                
+
+
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/" data-toggle="tooltip" data-placement="top" title="iOS开发技能树整理">
+                        Previous<br>
+                        <span>iOS开发技能树整理</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2017/10/29/synchronized%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" data-toggle="tooltip" data-placement="top" title="synchronized实现原理">
+                        Next<br>
+                        <span>synchronized实现原理</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+
+                
+                <!-- 多说评论框 start -->
+                <div class="comment">
+                    <div class="ds-thread"
+                        data-thread-key="/2017/10/23/PINCache源码阅读"
+                        data-title="PINCache源码阅读"
+                        data-url="http://localhost:4000/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" >
+                    </div>
+                </div>
+                <!-- 多说评论框 end -->
+                
+
+                
+
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+        				
+                            
+                				<a href="/tags/#技术" title="技术" rel="7">
+                                    技术
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                                    iOS开发
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#源码阅读" title="源码阅读" rel="2">
+                                    源码阅读
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#源码" title="源码" rel="3">
+                                    源码
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#runtime" title="runtime" rel="2">
+                                    runtime
+                                </a>
+                            
+        				
+        			</div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+                    
+                        <li><a href="http://www.mikeash.com/">Mikeash</a></li>
+                    
+                </ul>
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+    // dynamic User by Hux
+    var _user = 'D Tech Blog';
+
+    // duoshuo comment query.
+    var duoshuoQuery = {short_name: _user };
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0]
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+</script>
+<!-- 多说公共JS代码 end -->
+
+
+
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'always',
+          placement: 'right',
+          icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+    <!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">
+                    
+                    <li>
+                        <a href="/feed.xml">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+
+                    <!-- add Weibo, Zhihu by Hux, add target = "_blank" to <a> by Hux -->
+                    
+                    
+
+
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/dingjingpisces2015">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                </ul>
+                <p class="copyright text-muted">
+                    Copyright &copy; D Tech Blog 2017
+                    <br>
+                    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+            <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+                    <br>
+                    Theme by <a href="http://huangxuan.me">Hux</a> |
+                    <iframe
+                        style="margin-left: 2px; margin-bottom:-5px;"
+                        frameborder="0" scrolling="0" width="91px" height="20px"
+                        src="https://ghbtns.com/github-btn.html?user=huxpro&repo=huxpro.github.io&type=star&count=true" >
+                    </iframe>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- jQuery -->
+<script src="/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<script src="/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/js/hux-blog.min.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!-- 
+     Because of the native support for backtick-style fenced code blocks 
+     right within the Markdown is landed in Github Pages, 
+     From V1.6, There is no need for Highlight.js, 
+     so Huxblog drops it officially.
+
+     - https://github.com/blog/2100-github-pages-now-faster-and-simpler-with-jekyll-3-0  
+     - https://help.github.com/articles/creating-and-highlighting-code-blocks/ 
+     - https://github.com/jneen/rouge/wiki/list-of-supported-languages-and-lexers   
+-->
+<!--
+    <script>
+        async("http://cdn.bootcss.com/highlight.js/8.6/highlight.min.js", function(){
+            hljs.initHighlightingOnLoad();
+        })
+    </script>
+    <link href="http://cdn.bootcss.com/highlight.js/8.6/styles/github.min.css" rel="stylesheet">
+-->
+
+
+<!-- jquery.tagcloud.js -->
+<script>
+    // only load tagcloud.js in tag.html
+    if($('#tag_cloud').length !== 0){
+        async('/js/jquery.tagcloud.js',function(){
+            $.fn.tagcloud.defaults = {
+                //size: {start: 1, end: 1, unit: 'em'},
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+<!--fastClick.js -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+
+
+<!-- Baidu Tongji -->
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog (selector) {
+        var P = $('div.post-container'),a,n,t,l,i,c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#"+$(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="'+i+'" rel="nofollow">'+t+'</a>');
+            l = $('<li class="'+n+'_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;    
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function(e){
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     * Fork by Hux to support padding
+     */
+    async("/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+<!-- Image to hack wechat -->
+<img src="/img/icon_wechat.png" width="0" height="0" />
+<!-- Migrate from head to bottom, no longer block render and still work -->
+
+</body>
+
+</html>

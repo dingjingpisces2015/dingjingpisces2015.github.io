@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="xBT4GhYoi5qRD5tr338pgPM5OWHHIDR6mNg1a3euekI" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="iOS 开发分享">
+    <meta name="keywords"  content="dingjingpisces2015">
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>synchronized实现原理 - D Tech Blog</title>
+
+    <link rel="canonical" href="http://localhost:4000/2017/10/29/synchronized%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/hux-blog.min.css">
+
+    <!-- Pygments Github CSS -->
+    <link rel="stylesheet" href="/css/syntax.css">
+
+    <!-- Custom Fonts -->
+    <!-- <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"> -->
+    <!-- Hux change font-awesome CDN to qiniu -->
+    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+
+    <!-- Hux Delete, sad but pending in China
+    <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800' rel='stylesheet' type='text/
+    css'>
+    -->
+
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    <!-- Navigation -->
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+    <div class="container-fluid">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">D Tech Blog</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">Home</a>
+                    </li>
+                    
+                    <li>
+                        <a href="/about/">About</a>
+                    </li>
+                    
+                    <li>
+                        <a href="/tags/">Tags</a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+    <!-- /.container -->
+</nav>
+<script>
+    // Drop Bootstarp low-performance Navbar
+    // Use customize navbar with high-quality material design animation
+    // in high-perf jank-free CSS3 implementation
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    var __HuxNav__ = {
+        close: function(){
+            $navbar.className = " ";
+            // wait until animation end.
+            setTimeout(function(){
+                // prevent frequently toggle
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        },
+        open: function(){
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+
+    // Bind Event
+    $toggle.addEventListener('click', function(e){
+        if ($navbar.className.indexOf('in') > 0) {
+            __HuxNav__.close()
+        }else{
+            __HuxNav__.open()
+        }
+    })
+
+    /**
+     * Since Fastclick is used to delegate 'touchstart' globally
+     * to hack 300ms delay in iOS by performing a fake 'click',
+     * Using 'e.stopPropagation' to stop 'touchstart' event from 
+     * $toggle/$collapse will break global delegation.
+     * 
+     * Instead, we use a 'e.target' filter to prevent handler
+     * added to document close HuxNav.  
+     *
+     * Also, we use 'click' instead of 'touchstart' as compromise
+     */
+    document.addEventListener('click', function(e){
+        if(e.target == $toggle) return;
+        if(e.target.className == 'icon-bar') return;
+        __HuxNav__.close();
+    })
+</script>
+
+
+    <!-- Image to hack wechat -->
+<!-- <img src="/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="/img/post-bg-2015.jpg" width="0" height="0"> -->
+
+<!-- Post Header -->
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/img/post-bg-2015.jpg')
+    }
+
+    
+</style>
+<header class="intro-header" >
+    <div class="header-mask"></div>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/#技术" title="技术">技术</a>
+                        
+                        <a class="tag" href="/tags/#iOS开发" title="iOS开发">iOS开发</a>
+                        
+                        <a class="tag" href="/tags/#源码阅读" title="源码阅读">源码阅读</a>
+                        
+                        <a class="tag" href="/tags/#多线程" title="多线程">多线程</a>
+                        
+                        <a class="tag" href="/tags/#sychronized" title="sychronized">sychronized</a>
+                        
+                    </div>
+                    <h1>synchronized实现原理</h1>
+                    
+                    
+                    <h2 class="subheading"></h2>
+                    
+                    <span class="meta">Posted by dingjingpisces on October 29, 2017</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+                <span class="meta" id="copyright"></span>
+                <script> document.getElementById("copyright").innerHTML = "文章欢迎转载，但转载时请保留本段文字，并置于文章的顶部 作者：dingjingpisces 本文原文地址:" + decodeURI(window.location.href)</script>
+				<h1 id="synchronized实现原理">@synchronized实现原理</h1>
+<p>在iOS面试中，常常会问到锁的性能问题，对于@synchronized方式加锁,会的到认可的回答是，synchronized性能比较差，不建议使用。这个结论往往是通过测试得到，最近看了synchronized的runtime实现，希望从源码的角度分析为什么慢。</p>
+
+<p>先给出结论：<strong>@synchronized持有的锁本质是递归锁，由于开发者使用@synchronized的时候不持有声明锁，这锁其实是由系统持有并维护的，锁的存取会耗费额外的时间。</strong></p>
+
+<h2 id="synchronized与runtime">@synchronized与runtime</h2>
+<p>先通过clang的-rewrite-objc将带有synchronized的的OC代码转换成C,OC代码如下</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int main(int argc, const char * argv[]) {
+    @autoreleasepool {
+        NSObject *obj = [NSObject new];
+        @synchronized(obj) {
+            NSLog(@"sync log");
+        }
+    }
+    return 0;
+}
+</code></pre></div></div>
+<p>转换成C代码如下：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int main(int argc, const char * argv[]) {
+    /* @autoreleasepool */ { __AtAutoreleasePool __autoreleasepool;
+        NSObject *obj = ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass("NSObject"), sel_registerName("new"));// NSObject *obj = [NSObject new];
+        {
+id _rethrow = 0; id _sync_obj = (id)obj; objc_sync_enter(_sync_obj);//调用objc_sync_enter方法，参数是生成的对象obj
+try {
+  	struct _SYNC_EXIT {
+      _SYNC_EXIT(id arg) : sync_exit(arg) {}
+  	  ~_SYNC_EXIT() {
+        objc_sync_exit(sync_exit);
+      }
+  	id sync_exit;
+    }
+    _sync_exit(_sync_obj);//为啥这用小写，感觉是转换问题，理论上不能这么用，看含义是生成局部变量，离开try block时被析构，调用objc_sync_exit函数，参数仍然是obj
+
+    NSLog((NSString *)&amp;__NSConstantStringImpl__var_folders_yl_kqnznqhd4bb7gm2_sfxs1_j40000gn_T_synchronized_7ca75b_mi_0);
+       
+  } catch (id e) {_rethrow = e;} //cache了加解锁可能抛出的异常，重新付给_rethrow
+{ struct _FIN { _FIN(id reth) : rethrow(reth) {}
+	~_FIN() { if (rethrow) objc_exception_throw(rethrow); }
+	id rethrow;
+	} _fin_force_rethow(_rethrow);}
+} //析构时，调用objc_exception_throw抛出异常
+
+    }
+   }
+    return 0;
+}
+
+</code></pre></div></div>
+
+<p>抛开大小写和奇怪的调用，@synchronized(obj)的过程可以看成是：</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>1、objc_sync_enter(obj)
+2、执行block代码
+3、objc_sync_exit(obj)
+</code></pre></div></div>
+
+<p>接下来看objc_sync_enter &amp;  objc_sync_exit这两个函数是做什么的</p>
+
+<h2 id="objc_sync_enter---objc_sync_exit">objc_sync_enter &amp;  objc_sync_exit</h2>
+
+<p>下面是objc_sync_enter &amp;  objc_sync_exit的运行时代码（709.1）关键部分进行了注释</p>
+
+<p>objc_sync_enter</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int objc_sync_enter(id obj)
+{
+    int result = OBJC_SYNC_SUCCESS;
+
+    if (obj) {
+        SyncData* data = id2data(obj, ACQUIRE); //调用id2data获取SyncData结构对象
+        assert(data); //如果是空就抛出异常异常
+        data-&gt;mutex.lock();//最终的枷锁，查看SyncData结构可以发现mutex是一个递归锁
+    } else {
+        // @synchronized(nil) does nothing
+        if (DebugNilSync) {
+            _objc_inform("NIL SYNC DEBUG: @synchronized(nil); set a breakpoint on objc_sync_nil to debug");
+        }
+        objc_sync_nil();
+    }
+
+    return result;
+}
+</code></pre></div></div>
+
+<p>objc_sync_exit</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+// End synchronizing on 'obj'.
+// Returns OBJC_SYNC_SUCCESS or OBJC_SYNC_NOT_OWNING_THREAD_ERROR
+int objc_sync_exit(id obj)
+{
+    int result = OBJC_SYNC_SUCCESS;
+   
+    if (obj) {
+        SyncData* data = id2data(obj, RELEASE);  //调用id2datas释放对obj的锁，同时返回SyncData对象
+        if (!data) {//找不到就返回错误
+            result = OBJC_SYNC_NOT_OWNING_THREAD_ERROR;
+        } else {
+            bool okay = data-&gt;mutex.tryUnlock();//解锁
+            if (!okay) {
+                result = OBJC_SYNC_NOT_OWNING_THREAD_ERROR;
+            }
+        }
+    } else {
+        // @synchronized(nil) does nothing
+    }
+	
+
+    return result;
+}
+
+</code></pre></div></div>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>typedef struct SyncData {
+    struct SyncData* nextData;
+    DisguisedPtr&lt;objc_object&gt; object;
+    int32_t threadCount;  // number of THREADS using this block
+    recursive_mutex_t mutex;
+} SyncData;
+</code></pre></div></div>
+
+<p>从上述加解锁的过程可以看出，synchronized是通过传入的obj获取到对应的SyncData，最终对SyncData中的递归锁进行操作，实现了同步。从obj到SyncData的转化就要看id2data的实现了。</p>
+
+<h2 id="id2data-找到对象对应的锁">id2data-找到对象对应的锁</h2>
+
+<p>代码如下</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static SyncData* id2data(id object, enum usage why)
+{
+    spinlock_t *lockp = &amp;LOCK_FOR_OBJ(object);// LOCK_FOR_OBJ = sDataLists[obj].lock，从全局变量sDataLists中取出锁
+
+    SyncData **listp = &amp;LIST_FOR_OBJ(object);
+    SyncData* result = NULL;
+
+#if SUPPORT_DIRECT_THREAD_KEYS
+//这一段是尝试从TLS中快速获取最新访问到的数据,如果发现所给obj和在TLS中存储的obj是同一个的话,更新对象被锁的计数值，并返回
+// 目前看到SUPPORT_DIRECT_THREAD_KEYS是 0因此并不会执行
+  // Check per-thread single-entry fast cache for matching object
+    bool fastCacheOccupied = NO;
+    SyncData *data = (SyncData *)tls_get_direct(SYNC_DATA_DIRECT_KEY);
+    if (data) { //判断取出的对象是否为空
+        fastCacheOccupied = YES;
+
+        if (data-&gt;object == object) {//判断是否是同一个对象
+            // Found a match in fast cache.
+            uintptr_t lockCount;
+
+            result = data;
+            lockCount = (uintptr_t)tls_get_direct(SYNC_COUNT_DIRECT_KEY);//获得这个对象被锁定的次数
+            if (result-&gt;threadCount &lt;= 0  ||  lockCount &lt;= 0) {
+                _objc_fatal("id2data fastcache is buggy");
+            }
+
+            switch(why) {
+            case ACQUIRE: {
+                lockCount++;
+                tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)lockCount);//重新搞回去
+                break;
+            }
+            case RELEASE:
+                lockCount--;
+                tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)lockCount);
+                if (lockCount == 0) {
+                    // remove from fast cache
+                    tls_set_direct(SYNC_DATA_DIRECT_KEY, NULL);//清空被锁的值
+                    // atomic because may collide with concurrent ACQUIRE
+                    OSAtomicDecrement32Barrier(&amp;result-&gt;threadCount);
+                }
+                break;
+            case CHECK:
+                // do nothing
+                break;
+            }
+
+            return result;
+        }
+    }
+#endif
+
+    // Check per-thread cache of already-owned locks for matching object
+    SyncCache *cache = fetch_cache(NO);//从缓存中查找这个对象是否存在
+    if (cache) { //如果能找到
+        unsigned int i;
+        for (i = 0; i &lt; cache-&gt;used; i++) {
+            SyncCacheItem *item = &amp;cache-&gt;list[i];
+            if (item-&gt;data-&gt;object != object) continue;
+
+            // Found a match.
+            result = item-&gt;data;
+            if (result-&gt;threadCount &lt;= 0  ||  item-&gt;lockCount &lt;= 0) {
+                _objc_fatal("id2data cache is buggy");
+            }
+               
+            switch(why) {
+            case ACQUIRE://如果是获得锁操作，就给lockCount甲乙
+                item-&gt;lockCount++;
+                break;
+            case RELEASE:
+                item-&gt;lockCount--;
+                if (item-&gt;lockCount == 0) {
+                    // remove from per-thread cache
+                    cache-&gt;list[i] = cache-&gt;list[--cache-&gt;used];//更新缓存对象的使用状态
+                    // atomic because may collide with concurrent ACQUIRE
+                    OSAtomicDecrement32Barrier(&amp;result-&gt;threadCount);
+                }
+                break;
+            case CHECK:
+                // do nothing
+                break;
+            }
+
+            return result;
+        }
+    }
+
+    // Thread cache didn't find anything.
+    // Walk in-use list looking for matching object
+    // Spinlock prevents multiple threads from creating multiple
+    // locks for the same new object.
+    // We could keep the nodes in some hash table if we find that there are
+    // more than 20 or so distinct locks active, but we don't do that now.
+   
+    lockp-&gt;lock();//上面的解释比较清楚了，在缓存中也没找到，就遍历sDataLists查找或者新生成一个SyncData对象，并添加到sDataLists中，因此需要锁定sDataLists的这一列
+
+    {
+        SyncData* p;
+        SyncData* firstUnused = NULL;
+        for (p = *listp; p != NULL; p = p-&gt;nextData) {
+            if ( p-&gt;object == object ) {//查找看是否存在
+                result = p;
+                // atomic because may collide with concurrent RELEASE
+                OSAtomicIncrement32Barrier(&amp;result-&gt;threadCount);//更新正在使用该锁的线程数
+                goto done;
+            }
+            if ( (firstUnused == NULL) &amp;&amp; (p-&gt;threadCount == 0) )
+                firstUnused = p;
+        }
+   
+        // no SyncData currently associated with object
+        if ( (why == RELEASE) || (why == CHECK) )
+            goto done;
+   
+        // an unused one was found, use it
+        if ( firstUnused != NULL ) {//找到了一个已经在sDataLists中的但没有正在使用的SyncData对象，避免直接生成，而是将object指向传入值后并标记线程数为1，进行使用
+            result = firstUnused;
+            result-&gt;object = (objc_object *)object;
+            result-&gt;threadCount = 1;
+            goto done;
+        }
+    }
+
+    // malloc a new SyncData and add to list.
+    // XXX calling malloc with a global lock held is bad practice,
+    // might be worth releasing the lock, mallocing, and searching again.
+    // But since we never free these guys we won't be stuck in malloc very often.
+    result = (SyncData*)calloc(sizeof(SyncData), 1);
+    result-&gt;object = (objc_object *)object;
+    result-&gt;threadCount = 1;
+    new (&amp;result-&gt;mutex) recursive_mutex_t(fork_unsafe_lock);
+    result-&gt;nextData = *listp;
+    *listp = result;
+   
+ done:
+    lockp-&gt;unlock();//sDataLists的数据操作结束了，把锁解开
+    if (result) {
+        // Only new ACQUIRE should get here.
+        // All RELEASE and CHECK and recursive ACQUIRE are
+        // handled by the per-thread caches above.
+        if (why == RELEASE) {
+            // Probably some thread is incorrectly exiting
+            // while the object is held by another thread.
+            return nil;
+        }
+        if (why != ACQUIRE) _objc_fatal("id2data is buggy");
+        if (result-&gt;object != object) _objc_fatal("id2data is buggy");
+
+#if SUPPORT_DIRECT_THREAD_KEYS
+        if (!fastCacheOccupied) {//更新TLS
+            // Save in fast thread cache
+            tls_set_direct(SYNC_DATA_DIRECT_KEY, result);
+            tls_set_direct(SYNC_COUNT_DIRECT_KEY, (void*)1);
+        } else
+#endif
+        {
+            // Save in thread cache
+            if (!cache) cache = fetch_cache(YES);//更新缓存
+            cache-&gt;list[cache-&gt;used].data = result;
+            cache-&gt;list[cache-&gt;used].lockCount = 1;
+            cache-&gt;used++;
+        }
+    }
+
+    return result;
+}
+</code></pre></div></div>
+
+<p>可以看到所有的同步对象都由 <em>StripedMap&lt;T&gt;</em> 这个类进行管理，<em>StripedMap&lt;T&gt;</em>是objective -C runtime中定义的一种底层结构，实现了一种类似斑马线的结构，一共分了8条线，每个对象根据自己的内存地址被映射到不同的线上，每条线由一个锁控制，这么做的目的是尽可能的减少锁竞争（先挖个坑，之后会补充一篇StripedMap&lt;T&gt;的blog）</p>
+
+<h2 id="总结">总结</h2>
+<p>从上面的同步过程可以看到<strong>synchronized加锁本质是递归锁，SyncData这个结构将对象和递归锁绑定，StripedMap&lt;T&gt;这个全局结构维护了所有锁，尽管为了提高性能苹果大量的使用了TLS缓存，但比起直接用互斥锁或者递归锁进行加锁，对每个新对象都需要锁住StripedMap&lt;T&gt;的某条line,引入了一道加锁，同时还可能引起锁竞争，因此性能会比直接用锁差</strong>
+但比较明显的好处是不需要显式维护锁对象，代码阅读上清爽了不少。</p>
+
+
+
+                <hr>
+
+                
+                <!-- 多说 Share start -->
+                </style>
+                <div class="ds-share"
+                    style="text-align: right"
+                    data-thread-key="/2017/10/29/synchronized实现原理"
+                    data-title="synchronized实现原理"
+                    data-url="http://localhost:4000/2017/10/29/synchronized%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/"
+                    data-images="http://localhost:4000/img/post-bg-2015.jpg"
+                    data-content="@synchronized实现原理
+在iOS面试中，常常会问到锁的性能问题，对于@synchronized方式加锁,会的到认可的回答是，synchroni... | D Tech Blog " >
+                    <div class="ds-share-inline">
+                      <ul  class="ds-share-icons-16">
+                        <li data-toggle="ds-share-icons-more"><a class="ds-more" href="#">分享到：</a></li>
+                        <li><a class="ds-wechat flat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+                        <li><a class="ds-weibo flat" href="javascript:void(0);" data-service="weibo">微博</a></li>
+                        <li><a class="ds-douban flat" href="javascript:void(0);" data-service="douban">豆瓣</a></li>
+                      </ul>
+                      <div class="ds-share-icons-more">
+                      </div>
+                    </div>
+                <hr>
+                </div>
+                <!-- 多说 Share end-->
+                
+
+
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" data-toggle="tooltip" data-placement="top" title="PINCache源码阅读">
+                        Previous<br>
+                        <span>PINCache源码阅读</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2017/11/05/ObjectiveC%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E5%88%86%E6%9E%90/" data-toggle="tooltip" data-placement="top" title="Objective-C内存模型分析">
+                        Next<br>
+                        <span>Objective-C内存模型分析</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+
+                
+                <!-- 多说评论框 start -->
+                <div class="comment">
+                    <div class="ds-thread"
+                        data-thread-key="/2017/10/29/synchronized实现原理"
+                        data-title="synchronized实现原理"
+                        data-url="http://localhost:4000/2017/10/29/synchronized%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" >
+                    </div>
+                </div>
+                <!-- 多说评论框 end -->
+                
+
+                
+
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+        				
+                            
+                				<a href="/tags/#技术" title="技术" rel="7">
+                                    技术
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                                    iOS开发
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#源码阅读" title="源码阅读" rel="2">
+                                    源码阅读
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#源码" title="源码" rel="3">
+                                    源码
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#runtime" title="runtime" rel="2">
+                                    runtime
+                                </a>
+                            
+        				
+        			</div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+                    
+                        <li><a href="http://www.mikeash.com/">Mikeash</a></li>
+                    
+                </ul>
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+    // dynamic User by Hux
+    var _user = 'D Tech Blog';
+
+    // duoshuo comment query.
+    var duoshuoQuery = {short_name: _user };
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0]
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+</script>
+<!-- 多说公共JS代码 end -->
+
+
+
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'always',
+          placement: 'right',
+          icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+    <!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">
+                    
+                    <li>
+                        <a href="/feed.xml">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+
+                    <!-- add Weibo, Zhihu by Hux, add target = "_blank" to <a> by Hux -->
+                    
+                    
+
+
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/dingjingpisces2015">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                </ul>
+                <p class="copyright text-muted">
+                    Copyright &copy; D Tech Blog 2017
+                    <br>
+                    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+            <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+                    <br>
+                    Theme by <a href="http://huangxuan.me">Hux</a> |
+                    <iframe
+                        style="margin-left: 2px; margin-bottom:-5px;"
+                        frameborder="0" scrolling="0" width="91px" height="20px"
+                        src="https://ghbtns.com/github-btn.html?user=huxpro&repo=huxpro.github.io&type=star&count=true" >
+                    </iframe>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- jQuery -->
+<script src="/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<script src="/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/js/hux-blog.min.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!-- 
+     Because of the native support for backtick-style fenced code blocks 
+     right within the Markdown is landed in Github Pages, 
+     From V1.6, There is no need for Highlight.js, 
+     so Huxblog drops it officially.
+
+     - https://github.com/blog/2100-github-pages-now-faster-and-simpler-with-jekyll-3-0  
+     - https://help.github.com/articles/creating-and-highlighting-code-blocks/ 
+     - https://github.com/jneen/rouge/wiki/list-of-supported-languages-and-lexers   
+-->
+<!--
+    <script>
+        async("http://cdn.bootcss.com/highlight.js/8.6/highlight.min.js", function(){
+            hljs.initHighlightingOnLoad();
+        })
+    </script>
+    <link href="http://cdn.bootcss.com/highlight.js/8.6/styles/github.min.css" rel="stylesheet">
+-->
+
+
+<!-- jquery.tagcloud.js -->
+<script>
+    // only load tagcloud.js in tag.html
+    if($('#tag_cloud').length !== 0){
+        async('/js/jquery.tagcloud.js',function(){
+            $.fn.tagcloud.defaults = {
+                //size: {start: 1, end: 1, unit: 'em'},
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+<!--fastClick.js -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+
+
+<!-- Baidu Tongji -->
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog (selector) {
+        var P = $('div.post-container'),a,n,t,l,i,c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#"+$(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="'+i+'" rel="nofollow">'+t+'</a>');
+            l = $('<li class="'+n+'_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;    
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function(e){
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     * Fork by Hux to support padding
+     */
+    async("/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+<!-- Image to hack wechat -->
+<img src="/img/icon_wechat.png" width="0" height="0" />
+<!-- Migrate from head to bottom, no longer block render and still work -->
+
+</body>
+
+</html>
