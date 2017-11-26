@@ -57,7 +57,7 @@ Autorelease的实现数据结构是AutoreleasePage.AutoreleasePage中的地址�
 最新的Page称为hotPage,存储在TLS中，当新增一个obj到自动释放池时，如果hotPage已满或者不存在，会新生成一个Page，添加到原有链表中，并将该Page设置为hotPage
 
 如下图所示：
-![AutoreleasePage](img/autoreleasePage.png)
+![AutoreleasePage](https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/blob/master/img/autoreleasePage.png?raw=true)
 
 ## 数据操作 (Push/Pop)
 
