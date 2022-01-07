@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="xBT4GhYoi5qRD5tr338pgPM5OWHHIDR6mNg1a3euekI" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="iOS 开发分享">
+    <meta name="keywords"  content="dingjingpisces2015">
+    <link rel="shortcut icon" href="/img/favicon.ico">
+
+    <title>Flutter学习笔记 - D Tech Blog</title>
+
+    <link rel="canonical" href="http://localhost:4000/2020/11/17/Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">
+
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/hux-blog.min.css">
+
+    <!-- Pygments Github CSS -->
+    <link rel="stylesheet" href="/css/syntax.css">
+
+    <!-- Custom Fonts -->
+    <!-- <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css" rel="stylesheet" type="text/css"> -->
+    <!-- Hux change font-awesome CDN to qiniu -->
+    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+
+    <!-- Hux Delete, sad but pending in China
+    <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800' rel='stylesheet' type='text/
+    css'>
+    -->
+
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- ga & ba script hoook -->
+    <script></script>
+</head>
+
+
+<!-- hack iOS CSS :active style -->
+<body ontouchstart="">
+
+    <!-- Navigation -->
+<nav class="navbar navbar-default navbar-custom navbar-fixed-top">
+    <div class="container-fluid">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header page-scroll">
+            <button type="button" class="navbar-toggle">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">D Tech Blog</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <div id="huxblog_navbar">
+            <div class="navbar-collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/">Home</a>
+                    </li>
+                    
+                    <li>
+                        <a href="/about/">About</a>
+                    </li>
+                    
+                    <li>
+                        <a href="/tags/">Tags</a>
+                    </li>
+                    
+                </ul>
+            </div>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+    <!-- /.container -->
+</nav>
+<script>
+    // Drop Bootstarp low-performance Navbar
+    // Use customize navbar with high-quality material design animation
+    // in high-perf jank-free CSS3 implementation
+    var $body   = document.body;
+    var $toggle = document.querySelector('.navbar-toggle');
+    var $navbar = document.querySelector('#huxblog_navbar');
+    var $collapse = document.querySelector('.navbar-collapse');
+
+    var __HuxNav__ = {
+        close: function(){
+            $navbar.className = " ";
+            // wait until animation end.
+            setTimeout(function(){
+                // prevent frequently toggle
+                if($navbar.className.indexOf('in') < 0) {
+                    $collapse.style.height = "0px"
+                }
+            },400)
+        },
+        open: function(){
+            $collapse.style.height = "auto"
+            $navbar.className += " in";
+        }
+    }
+
+    // Bind Event
+    $toggle.addEventListener('click', function(e){
+        if ($navbar.className.indexOf('in') > 0) {
+            __HuxNav__.close()
+        }else{
+            __HuxNav__.open()
+        }
+    })
+
+    /**
+     * Since Fastclick is used to delegate 'touchstart' globally
+     * to hack 300ms delay in iOS by performing a fake 'click',
+     * Using 'e.stopPropagation' to stop 'touchstart' event from 
+     * $toggle/$collapse will break global delegation.
+     * 
+     * Instead, we use a 'e.target' filter to prevent handler
+     * added to document close HuxNav.  
+     *
+     * Also, we use 'click' instead of 'touchstart' as compromise
+     */
+    document.addEventListener('click', function(e){
+        if(e.target == $toggle) return;
+        if(e.target.className == 'icon-bar') return;
+        __HuxNav__.close();
+    })
+</script>
+
+
+    <!-- Image to hack wechat -->
+<!-- <img src="/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="/img/post-bg-2015.jpg" width="0" height="0"> -->
+
+<!-- Post Header -->
+<style type="text/css">
+    header.intro-header{
+        position: relative;
+        background-image: url('/img/post-bg-2015.jpg')
+    }
+
+    
+</style>
+<header class="intro-header" >
+    <div class="header-mask"></div>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                        <a class="tag" href="/tags/#技术" title="技术">技术</a>
+                        
+                        <a class="tag" href="/tags/#iOS开发" title="iOS开发">iOS开发</a>
+                        
+                        <a class="tag" href="/tags/#Flutter" title="Flutter">Flutter</a>
+                        
+                    </div>
+                    <h1>Flutter学习笔记</h1>
+                    
+                    
+                    <h2 class="subheading">简单记录下学习过程，持续更新中</h2>
+                    
+                    <span class="meta">Posted by dingjingpisces on November 17, 2020</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+                <span class="meta" id="copyright"></span>
+                <script> document.getElementById("copyright").innerHTML = "文章欢迎转载，但转载时请保留本段文字，并置于文章的顶部 作者：dingjingpisces 本文原文地址:" + decodeURI(window.location.href)</script>
+				<h1 id="开始搞flutter的第一天">开始搞Flutter的第一天</h1>
+
+<p>第一次入手Flutter,当然先从<a href="https://flutter.dev/docs/get-started/install">官网</a>开始了。
+<a href="https://flutterchina.club/flutter-for-ios/">Flutter中文</a> 对flutter网站的翻译，有些地方不能一一对应。</p>
+
+<p>按部就班的安装，没什么好说的。</p>
+
+<h2 id="development-笔记">Development 笔记</h2>
+
+<blockquote>
+  <p><a href="https://flutter.dev/docs/development/ui/widgets-intro">Widget Intro </a></p>
+</blockquote>
+
+<ol>
+  <li>
+    <p>Flutter和React的相似之处是都有一个函数返回UI, Flutter是Widget build, React是render()</p>
+  </li>
+  <li>
+    <p>StatefulWidget和State是分离的两个类， StatefulWidget持有State, State类负责存储状态，和状态转换，以及状态转换成UI的build函数. 最后给了一个吧StatefulWidget拆分成两个StatelesWidget的例子，应该也是为了推荐无状态Widget的使用，实现组件复用。</p>
+  </li>
+  <li>
+    <p>Dart的初始化函数别具一格(附上<a href="http://www.geekjc.com/ebook/detail/5bbdc2b33f74c812e3ac9a18/1546846473973">Dart语法网站链接</a>)</p>
+  </li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class CounterDisplay extends StatelessWidget {
+  CounterDisplay({this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('Count: $count');
+  }
+}
+
+</code></pre></div></div>
+
+<ol>
+  <li>
+    <p>为了解决共享状态的问题，一般会向子wedget里传入一个包含state的函数，而state的改变是在这个函数里，state就可以存在parent里了</p>
+  </li>
+  <li>
+    <p>重新创建一个同样的Widget成本并不高，因为Flutter framework会做diff</p>
+  </li>
+  <li>
+    <p>State也提供了一些常见的声明周期（<a href="https://api.flutter.dev/flutter/widgets/State-class.html">Doc</a>）<code class="language-plaintext highlighter-rouge">deactivate</code>, <code class="language-plaintext highlighter-rouge">didUpdateWidget</code>, <code class="language-plaintext highlighter-rouge">dispose</code> etc</p>
+  </li>
+  <li>
+    <p>存在Key作为widget的identity的概念，分siblings和glboal key, 都要求在各自可见范围内唯一。</p>
+  </li>
+</ol>
+
+<blockquote>
+  <p><a href="https://flutter.dev/docs/development/ui/layout">Building layout- 使用</a></p>
+</blockquote>
+
+<ul>
+  <li>Widget是用来创建UI的类</li>
+  <li>Widget可以被用来生成Layout和UI</li>
+  <li>组合简单的widget可以产生复杂的widget</li>
+</ul>
+
+<ol>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">debugPaintSizeEnabled</code> 可以渲染页面结构 <a href="https://flutter.dev/docs/development/tools/devtools/inspector#debugging-layout-issues-visually">UI debug doc</a></p>
+  </li>
+  <li>
+    <p>想要给view增加padding, margin, border, background color， 命名组件？（不理解） 都需要使用Container widget包裹</p>
+  </li>
+  <li>
+    <p>Scaffold widget是Material的一种，提供了默认的banner吗backgroundcolor还提供了其他的接口。</p>
+  </li>
+</ol>
+
+<ul>
+  <li>Container: Adds padding, margins, borders, background color, or other decorations to a widget.</li>
+  <li>GridView: Lays widgets out as a scrollable grid.</li>
+  <li>ListView: Lays widgets out as a scrollable list.</li>
+  <li>Stack: Overlaps a widget on top of another</li>
+</ul>
+
+<ol>
+  <li>
+    <p>Stack 的逻辑和想的不一样，以为是类似listview的线性排列，其实是从下到上的覆盖逻辑， 第一个是baseview,后面的内容覆盖在baseview上</p>
+  </li>
+  <li>
+    <p>添加图片要先在<code class="language-plaintext highlighter-rouge">pubspec.yaml</code>里打开<code class="language-plaintext highlighter-rouge">assets</code>配置, <code class="language-plaintext highlighter-rouge">pubspec.yaml</code>里的配置是<strong>大小写敏感的</strong></p>
+  </li>
+</ol>
+
+<blockquote>
+  <p><a href="https://flutter.dev/docs/development/ui/layout/constraints">Core rule: Constraints go down,  Size go up, Parent sets position. </a> 值的一读</p>
+</blockquote>
+
+<ol>
+  <li>Widget可以在它parent允许的范围内决定自己的size</li>
+  <li>Widget不知道也不能决定自己在screen的位置（position），位置是由parent决定的</li>
+  <li>因为每个Widget的size和position都是由parent决定的，所以在遍历完整颗树前是不能知道某个Widget的精确大小和位置的。</li>
+  <li>Widget是通过底层的RenderBox做渲染的</li>
+</ol>
+
+<blockquote>
+  <p><a href="https://flutter.dev/docs/development/ui/interactive">Adding interactivity to your Flutter app</a></p>
+</blockquote>
+
+<ol>
+  <li>一个有状态的widget需要实现两个类的子类：StatefulWidget， States</li>
+  <li>State可以由当前组件，父组件，混合的方式实现，由父组件管理状态时，一般是把状态做为子组件的参数传进去</li>
+</ol>
+
+<blockquote>
+  <p>Asset 和 图片添加 <a href="https://flutter.dev/docs/development/ui/assets-and-images">link</a></p>
+</blockquote>
+
+<ol>
+  <li>
+    <p>可以通过  AssetBundle  loadString() 来load string/text 资源， load() 来load image/binary</p>
+  </li>
+  <li>
+    <p>可以通过import ‘package:flutter/services.dart’ show rootBundle; 来获取全局的AssertBundle</p>
+  </li>
+  <li>
+    <p>…/2.0x/my_icon.png, 系统会根据屏幕分辨率，自动选取合适的图片</p>
+  </li>
+  <li>
+    <p>。当主资源缺少某个文件时，会按分辨率从低到高的顺序去选择，也就是说 1x 中没有的话会在 2x 中找，2x 中还没有的话就在 3x 中找</p>
+  </li>
+  <li>
+    <p>设备像素比 取决于 MediaQueryData.size 的大小，它需要在祖先节点提供 MaterialApp 或者 CupertinoApp 作为 AssetImage 的祖先节点。 <strong>这是啥东西完全不理解</strong></p>
+  </li>
+  <li>
+    <p>Android, iOS, flutter的资源文件可以互相访问</p>
+  </li>
+  <li>
+    <p>应用图标和启动图只能在Android, iOS工程里替换</p>
+  </li>
+</ol>
+
+<blockquote>
+  <p><a href="https://medium.com/flutter/learning-flutters-new-navigation-and-routing-system-7c9068155ade">路由和导航</a> <a href="https://blog.csdn.net/u013491829/article/details/109330086">中文版</a></p>
+</blockquote>
+
+<p>Router 1.0的组件有</p>
+
+<ul>
+  <li>Navigator</li>
+  <li>Router</li>
+</ul>
+
+<ol>
+  <li>
+    <p>匿名router是通过builder直接生成页面</p>
+  </li>
+  <li>
+    <p>routers 给的path只能固定字符串跳转，算是命名的router</p>
+  </li>
+  <li>
+    <p>onGenerateRoute(setting) 可以处理所有的router, 自己解析参数, setting是RouteSettings的实例</p>
+  </li>
+</ol>
+
+<p>Router 2.0的组件有</p>
+
+<p>2.0好难理解</p>
+<ul>
+  <li>Page 要展示的页面，Navigator会有一个pages的参数，可以声明压栈顺序</li>
+  <li>Router</li>
+  <li>RouteInformationParser</li>
+  <li>RouterDelegate</li>
+  <li>BackButtonDispatcher</li>
+</ul>
+
+<p><img src="https://miro.medium.com/max/1400/1*hNt4Bc8FZBp_Gqh7iED3FA.png" /></p>
+
+<ol>
+  <li>RouteInformationParser, RouterDelegate 用来动态处理导航跳转</li>
+  <li>TransitionDelegate 可以自定义导航动画</li>
+</ol>
+
+<blockquote>
+  <p>Animations [https://flutter.dev/docs/development/ui/animations]
+暂时跳过， 不太理解，也很难用到</p>
+</blockquote>
+
+<p>选择使用哪种Animation的路线图</p>
+
+<p><img src="https://flutter.dev/assets/ui/animations/animation-decision-tree-cf57f0d6c1b6fd8e7ea512bd659c2f97a2f142f1137e89d1f67a5fbc1be9f2c3.png" /></p>
+
+<blockquote>
+  <p>Advanced UI [https://flutter.dev/docs/development/ui/advanced/slivers]</p>
+</blockquote>
+
+<p>1.(Slivers)[https://flutter.dev/docs/development/ui/advanced/slivers]
+SliverAppBar 感觉是一种会随着滑动变高或者完全隐藏的NavigationBar</p>
+
+<p>SliverList
+SliverGrid</p>
+
+
+
+                <hr>
+
+                
+                <!-- 多说 Share start -->
+                </style>
+                <div class="ds-share"
+                    style="text-align: right"
+                    data-thread-key="/2020/11/17/Flutter学习笔记"
+                    data-title="Flutter学习笔记"
+                    data-url="http://localhost:4000/2020/11/17/Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/"
+                    data-images="http://localhost:4000/img/post-bg-2015.jpg"
+                    data-content="开始搞Flutter的第一天
+
+第一次入手Flutter,当然先从官网开始了。
+Flutter中文 对flutter网站的翻译，有些地方不能一一对应。
+
+... | D Tech Blog " >
+                    <div class="ds-share-inline">
+                      <ul  class="ds-share-icons-16">
+                        <li data-toggle="ds-share-icons-more"><a class="ds-more" href="#">分享到：</a></li>
+                        <li><a class="ds-wechat flat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+                        <li><a class="ds-weibo flat" href="javascript:void(0);" data-service="weibo">微博</a></li>
+                        <li><a class="ds-douban flat" href="javascript:void(0);" data-service="douban">豆瓣</a></li>
+                      </ul>
+                      <div class="ds-share-icons-more">
+                      </div>
+                    </div>
+                <hr>
+                </div>
+                <!-- 多说 Share end-->
+                
+
+
+                <ul class="pager">
+                    
+                    <li class="previous">
+                        <a href="/2019/05/14/Airbnb%E5%88%B7%E9%A2%98%E6%80%BB%E7%BB%93/" data-toggle="tooltip" data-placement="top" title="Airbnb刷题整理">
+                        Previous<br>
+                        <span>Airbnb刷题整理</span>
+                        </a>
+                    </li>
+                    
+                    
+                    <li class="next">
+                        <a href="/2022/01/02/async_await/" data-toggle="tooltip" data-placement="top" title="async/await/actor on swift 5.5">
+                        Next<br>
+                        <span>async/await/actor on swift 5.5</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+
+                
+                <!-- 多说评论框 start -->
+                <div class="comment">
+                    <div class="ds-thread"
+                        data-thread-key="/2020/11/17/Flutter学习笔记"
+                        data-title="Flutter学习笔记"
+                        data-url="http://localhost:4000/2020/11/17/Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" >
+                    </div>
+                </div>
+                <!-- 多说评论框 end -->
+                
+
+                
+
+            </div>  
+
+    <!-- Side Catalog Container -->
+        
+            <div class="
+                col-lg-2 col-lg-offset-0
+                visible-lg-block
+                sidebar-container
+                catalog-container">
+                <div class="side-catalog">
+                    <hr class="hidden-sm hidden-xs">
+                    <h5>
+                        <a class="catalog-toggle" href="#">CATALOG</a>
+                    </h5>
+                    <ul class="catalog-body"></ul>
+                </div>
+            </div>
+        
+
+    <!-- Sidebar Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <hr class="hidden-sm hidden-xs">
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+        				
+                            
+                				<a href="/tags/#技术" title="技术" rel="10">
+                                    技术
+                                </a>
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="9">
+                                    iOS开发
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#源码阅读" title="源码阅读" rel="2">
+                                    源码阅读
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+                				<a href="/tags/#源码" title="源码" rel="4">
+                                    源码
+                                </a>
+                            
+        				
+                            
+                				<a href="/tags/#runtime" title="runtime" rel="3">
+                                    runtime
+                                </a>
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+                            
+        				
+        			</div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+                    
+                        <li><a href="http://www.mikeash.com/">Mikeash</a></li>
+                    
+                </ul>
+                
+            </div>
+        </div>
+    </div>
+</article>
+
+
+
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+    // dynamic User by Hux
+    var _user = 'D Tech Blog';
+
+    // duoshuo comment query.
+    var duoshuoQuery = {short_name: _user };
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0]
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+</script>
+<!-- 多说公共JS代码 end -->
+
+
+
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'always',
+          placement: 'right',
+          icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
+    <!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <ul class="list-inline text-center">
+                    
+                    <li>
+                        <a href="/feed.xml">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+
+                    <!-- add Weibo, Zhihu by Hux, add target = "_blank" to <a> by Hux -->
+                    
+                    
+
+
+                    
+                    
+                    <li>
+                        <a target="_blank" href="https://github.com/dingjingpisces2015">
+                            <span class="fa-stack fa-lg">
+                                <i class="fa fa-circle fa-stack-2x"></i>
+                                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+                            </span>
+                        </a>
+                    </li>
+                    
+                    
+                </ul>
+                <p class="copyright text-muted">
+                    Copyright &copy; D Tech Blog 2022
+                    <br>
+                    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+            <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+                    <br>
+                    Theme by <a href="http://huangxuan.me">Hux</a> |
+                    <iframe
+                        style="margin-left: 2px; margin-bottom:-5px;"
+                        frameborder="0" scrolling="0" width="91px" height="20px"
+                        src="https://ghbtns.com/github-btn.html?user=huxpro&repo=huxpro.github.io&type=star&count=true" >
+                    </iframe>
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- jQuery -->
+<script src="/js/jquery.min.js "></script>
+
+<!-- Bootstrap Core JavaScript -->
+<script src="/js/bootstrap.min.js "></script>
+
+<!-- Custom Theme JavaScript -->
+<script src="/js/hux-blog.min.js "></script>
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+
+<!-- 
+     Because of the native support for backtick-style fenced code blocks 
+     right within the Markdown is landed in Github Pages, 
+     From V1.6, There is no need for Highlight.js, 
+     so Huxblog drops it officially.
+
+     - https://github.com/blog/2100-github-pages-now-faster-and-simpler-with-jekyll-3-0  
+     - https://help.github.com/articles/creating-and-highlighting-code-blocks/ 
+     - https://github.com/jneen/rouge/wiki/list-of-supported-languages-and-lexers   
+-->
+<!--
+    <script>
+        async("http://cdn.bootcss.com/highlight.js/8.6/highlight.min.js", function(){
+            hljs.initHighlightingOnLoad();
+        })
+    </script>
+    <link href="http://cdn.bootcss.com/highlight.js/8.6/styles/github.min.css" rel="stylesheet">
+-->
+
+
+<!-- jquery.tagcloud.js -->
+<script>
+    // only load tagcloud.js in tag.html
+    if($('#tag_cloud').length !== 0){
+        async('/js/jquery.tagcloud.js',function(){
+            $.fn.tagcloud.defaults = {
+                //size: {start: 1, end: 1, unit: 'em'},
+                color: {start: '#bbbbee', end: '#0085a1'},
+            };
+            $('#tag_cloud a').tagcloud();
+        })
+    }
+</script>
+
+<!--fastClick.js -->
+<script>
+    async("//cdnjs.cloudflare.com/ajax/libs/fastclick/1.0.6/fastclick.min.js", function(){
+        var $nav = document.querySelector("nav");
+        if($nav) FastClick.attach($nav);
+    })
+</script>
+
+
+<!-- Google Analytics -->
+
+
+
+<!-- Baidu Tongji -->
+
+
+
+<!-- Side Catalog -->
+
+<script type="text/javascript">
+    function generateCatalog (selector) {
+        var P = $('div.post-container'),a,n,t,l,i,c;
+        a = P.find('h1,h2,h3,h4,h5,h6');
+        a.each(function () {
+            n = $(this).prop('tagName').toLowerCase();
+            i = "#"+$(this).prop('id');
+            t = $(this).text();
+            c = $('<a href="'+i+'" rel="nofollow">'+t+'</a>');
+            l = $('<li class="'+n+'_nav"></li>').append(c);
+            $(selector).append(l);
+        });
+        return true;    
+    }
+
+    generateCatalog(".catalog-body");
+
+    // toggle side catalog
+    $(".catalog-toggle").click((function(e){
+        e.preventDefault();
+        $('.side-catalog').toggleClass("fold")
+    }))
+
+    /*
+     * Doc: https://github.com/davist11/jQuery-One-Page-Nav
+     * Fork by Hux to support padding
+     */
+    async("/js/jquery.nav.js", function () {
+        $('.catalog-body').onePageNav({
+            currentClass: "active",
+            changeHash: !1,
+            easing: "swing",
+            filter: "",
+            scrollSpeed: 700,
+            scrollOffset: 0,
+            scrollThreshold: .2,
+            begin: null,
+            end: null,
+            scrollChange: null,
+            padding: 80
+        });
+    });
+</script>
+
+
+
+
+
+<!-- Image to hack wechat -->
+<img src="/img/icon_wechat.png" width="0" height="0" />
+<!-- Migrate from head to bottom, no longer block render and still work -->
+
+</body>
+
+</html>
