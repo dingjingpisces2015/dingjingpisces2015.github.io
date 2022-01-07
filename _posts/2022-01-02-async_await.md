@@ -25,7 +25,9 @@ tags:
   - [Protect mutable state with Swift actors](https://developer.apple.com/videos/play/wwdc2021/10133)
 
 
-# async/await 的一些基本使用（[Session] Meet async/await in Swift）
+# async/await 的一些基本使用
+
+> Meet async/await in Swift
 
 
 ### 一些基本用法的例子
@@ -187,7 +189,9 @@ extension ViewController: PeerSyncDelegate {
 }
 ```
 
-# 结构化并发（[section] Explore structed concurrency in Swift）
+# 结构化并发
+
+> Explore structed concurrency in Swift
 
 ### Task
 
