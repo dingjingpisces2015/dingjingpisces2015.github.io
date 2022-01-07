@@ -5,218 +5,9 @@
     <description>iOS 开发分享</description>
     <link>http://localhost:4000/</link>
     <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Fri, 07 Jan 2022 20:28:02 +0800</pubDate>
-    <lastBuildDate>Fri, 07 Jan 2022 20:28:02 +0800</lastBuildDate>
+    <pubDate>Fri, 07 Jan 2022 20:31:36 +0800</pubDate>
+    <lastBuildDate>Fri, 07 Jan 2022 20:31:36 +0800</lastBuildDate>
     <generator>Jekyll v4.2.1</generator>
-    
-      <item>
-        <title></title>
-        <description>&lt;h1 id=&quot;开始搞flutter的第一天&quot;&gt;开始搞Flutter的第一天&lt;/h1&gt;
-
-&lt;p&gt;第一次入手Flutter,当然先从&lt;a href=&quot;https://flutter.dev/docs/get-started/install&quot;&gt;官网&lt;/a&gt;开始了。
-&lt;a href=&quot;https://flutterchina.club/flutter-for-ios/&quot;&gt;Flutter中文&lt;/a&gt; 对flutter网站的翻译，有些地方不能一一对应。&lt;/p&gt;
-
-&lt;p&gt;按部就班的安装，没什么好说的。&lt;/p&gt;
-
-&lt;h2 id=&quot;development-笔记&quot;&gt;Development 笔记&lt;/h2&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/widgets-intro&quot;&gt;Widget Intro &lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;
-    &lt;p&gt;Flutter和React的相似之处是都有一个函数返回UI, Flutter是Widget build, React是render()&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;StatefulWidget和State是分离的两个类， StatefulWidget持有State, State类负责存储状态，和状态转换，以及状态转换成UI的build函数. 最后给了一个吧StatefulWidget拆分成两个StatelesWidget的例子，应该也是为了推荐无状态Widget的使用，实现组件复用。&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;Dart的初始化函数别具一格(附上&lt;a href=&quot;http://www.geekjc.com/ebook/detail/5bbdc2b33f74c812e3ac9a18/1546846473973&quot;&gt;Dart语法网站链接&lt;/a&gt;)&lt;/p&gt;
-  &lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class CounterDisplay extends StatelessWidget {
-  CounterDisplay({this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text('Count: $count');
-  }
-}
-
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;
-    &lt;p&gt;为了解决共享状态的问题，一般会向子wedget里传入一个包含state的函数，而state的改变是在这个函数里，state就可以存在parent里了&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;重新创建一个同样的Widget成本并不高，因为Flutter framework会做diff&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;State也提供了一些常见的声明周期（&lt;a href=&quot;https://api.flutter.dev/flutter/widgets/State-class.html&quot;&gt;Doc&lt;/a&gt;）&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;deactivate&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;didUpdateWidget&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;dispose&lt;/code&gt; etc&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;存在Key作为widget的identity的概念，分siblings和glboal key, 都要求在各自可见范围内唯一。&lt;/p&gt;
-  &lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/layout&quot;&gt;Building layout- 使用&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;Widget是用来创建UI的类&lt;/li&gt;
-  &lt;li&gt;Widget可以被用来生成Layout和UI&lt;/li&gt;
-  &lt;li&gt;组合简单的widget可以产生复杂的widget&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;
-    &lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;debugPaintSizeEnabled&lt;/code&gt; 可以渲染页面结构 &lt;a href=&quot;https://flutter.dev/docs/development/tools/devtools/inspector#debugging-layout-issues-visually&quot;&gt;UI debug doc&lt;/a&gt;&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;想要给view增加padding, margin, border, background color， 命名组件？（不理解） 都需要使用Container widget包裹&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;Scaffold widget是Material的一种，提供了默认的banner吗backgroundcolor还提供了其他的接口。&lt;/p&gt;
-  &lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;Container: Adds padding, margins, borders, background color, or other decorations to a widget.&lt;/li&gt;
-  &lt;li&gt;GridView: Lays widgets out as a scrollable grid.&lt;/li&gt;
-  &lt;li&gt;ListView: Lays widgets out as a scrollable list.&lt;/li&gt;
-  &lt;li&gt;Stack: Overlaps a widget on top of another&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;
-    &lt;p&gt;Stack 的逻辑和想的不一样，以为是类似listview的线性排列，其实是从下到上的覆盖逻辑， 第一个是baseview,后面的内容覆盖在baseview上&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;添加图片要先在&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pubspec.yaml&lt;/code&gt;里打开&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;assets&lt;/code&gt;配置, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pubspec.yaml&lt;/code&gt;里的配置是&lt;strong&gt;大小写敏感的&lt;/strong&gt;&lt;/p&gt;
-  &lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/layout/constraints&quot;&gt;Core rule: Constraints go down,  Size go up, Parent sets position. &lt;/a&gt; 值的一读&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;Widget可以在它parent允许的范围内决定自己的size&lt;/li&gt;
-  &lt;li&gt;Widget不知道也不能决定自己在screen的位置（position），位置是由parent决定的&lt;/li&gt;
-  &lt;li&gt;因为每个Widget的size和position都是由parent决定的，所以在遍历完整颗树前是不能知道某个Widget的精确大小和位置的。&lt;/li&gt;
-  &lt;li&gt;Widget是通过底层的RenderBox做渲染的&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/interactive&quot;&gt;Adding interactivity to your Flutter app&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;一个有状态的widget需要实现两个类的子类：StatefulWidget， States&lt;/li&gt;
-  &lt;li&gt;State可以由当前组件，父组件，混合的方式实现，由父组件管理状态时，一般是把状态做为子组件的参数传进去&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;Asset 和 图片添加 &lt;a href=&quot;https://flutter.dev/docs/development/ui/assets-and-images&quot;&gt;link&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;
-    &lt;p&gt;可以通过  AssetBundle  loadString() 来load string/text 资源， load() 来load image/binary&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;可以通过import ‘package:flutter/services.dart’ show rootBundle; 来获取全局的AssertBundle&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;…/2.0x/my_icon.png, 系统会根据屏幕分辨率，自动选取合适的图片&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;。当主资源缺少某个文件时，会按分辨率从低到高的顺序去选择，也就是说 1x 中没有的话会在 2x 中找，2x 中还没有的话就在 3x 中找&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;设备像素比 取决于 MediaQueryData.size 的大小，它需要在祖先节点提供 MaterialApp 或者 CupertinoApp 作为 AssetImage 的祖先节点。 &lt;strong&gt;这是啥东西完全不理解&lt;/strong&gt;&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;Android, iOS, flutter的资源文件可以互相访问&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;应用图标和启动图只能在Android, iOS工程里替换&lt;/p&gt;
-  &lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;&lt;a href=&quot;https://medium.com/flutter/learning-flutters-new-navigation-and-routing-system-7c9068155ade&quot;&gt;路由和导航&lt;/a&gt; &lt;a href=&quot;https://blog.csdn.net/u013491829/article/details/109330086&quot;&gt;中文版&lt;/a&gt;&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;Router 1.0的组件有&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;Navigator&lt;/li&gt;
-  &lt;li&gt;Router&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;
-    &lt;p&gt;匿名router是通过builder直接生成页面&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;routers 给的path只能固定字符串跳转，算是命名的router&lt;/p&gt;
-  &lt;/li&gt;
-  &lt;li&gt;
-    &lt;p&gt;onGenerateRoute(setting) 可以处理所有的router, 自己解析参数, setting是RouteSettings的实例&lt;/p&gt;
-  &lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;p&gt;Router 2.0的组件有&lt;/p&gt;
-
-&lt;p&gt;2.0好难理解&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;Page 要展示的页面，Navigator会有一个pages的参数，可以声明压栈顺序&lt;/li&gt;
-  &lt;li&gt;Router&lt;/li&gt;
-  &lt;li&gt;RouteInformationParser&lt;/li&gt;
-  &lt;li&gt;RouterDelegate&lt;/li&gt;
-  &lt;li&gt;BackButtonDispatcher&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;&lt;img src=&quot;https://miro.medium.com/max/1400/1*hNt4Bc8FZBp_Gqh7iED3FA.png&quot; /&gt;&lt;/p&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;RouteInformationParser, RouterDelegate 用来动态处理导航跳转&lt;/li&gt;
-  &lt;li&gt;TransitionDelegate 可以自定义导航动画&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;Animations [https://flutter.dev/docs/development/ui/animations]
-暂时跳过， 不太理解，也很难用到&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;选择使用哪种Animation的路线图&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&quot;https://flutter.dev/assets/ui/animations/animation-decision-tree-cf57f0d6c1b6fd8e7ea512bd659c2f97a2f142f1137e89d1f67a5fbc1be9f2c3.png&quot; /&gt;&lt;/p&gt;
-
-&lt;blockquote&gt;
-  &lt;p&gt;Advanced UI [https://flutter.dev/docs/development/ui/advanced/slivers]&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;1.(Slivers)[https://flutter.dev/docs/development/ui/advanced/slivers]
-SliverAppBar 感觉是一种会随着滑动变高或者完全隐藏的NavigationBar&lt;/p&gt;
-
-&lt;p&gt;SliverList
-SliverGrid&lt;/p&gt;
-
-</description>
-        <pubDate>Fri, 07 Jan 2022 20:28:02 +0800</pubDate>
-        <link>http://localhost:4000/2022/01/07/2020-11-17-Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</link>
-        <guid isPermaLink="true">http://localhost:4000/2022/01/07/2020-11-17-Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</guid>
-        
-        
-      </item>
     
       <item>
         <title>async/await/actor on swift 5.5</title>
@@ -579,6 +370,221 @@ class MyDelegate: UICollectionViewDelegate {
         <category>iOS开发</category>
         
         <category>Swift</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Flutter学习笔记</title>
+        <description>&lt;h1 id=&quot;开始搞flutter的第一天&quot;&gt;开始搞Flutter的第一天&lt;/h1&gt;
+
+&lt;p&gt;第一次入手Flutter,当然先从&lt;a href=&quot;https://flutter.dev/docs/get-started/install&quot;&gt;官网&lt;/a&gt;开始了。
+&lt;a href=&quot;https://flutterchina.club/flutter-for-ios/&quot;&gt;Flutter中文&lt;/a&gt; 对flutter网站的翻译，有些地方不能一一对应。&lt;/p&gt;
+
+&lt;p&gt;按部就班的安装，没什么好说的。&lt;/p&gt;
+
+&lt;h2 id=&quot;development-笔记&quot;&gt;Development 笔记&lt;/h2&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/widgets-intro&quot;&gt;Widget Intro &lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Flutter和React的相似之处是都有一个函数返回UI, Flutter是Widget build, React是render()&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;StatefulWidget和State是分离的两个类， StatefulWidget持有State, State类负责存储状态，和状态转换，以及状态转换成UI的build函数. 最后给了一个吧StatefulWidget拆分成两个StatelesWidget的例子，应该也是为了推荐无状态Widget的使用，实现组件复用。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Dart的初始化函数别具一格(附上&lt;a href=&quot;http://www.geekjc.com/ebook/detail/5bbdc2b33f74c812e3ac9a18/1546846473973&quot;&gt;Dart语法网站链接&lt;/a&gt;)&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class CounterDisplay extends StatelessWidget {
+  CounterDisplay({this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('Count: $count');
+  }
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;为了解决共享状态的问题，一般会向子wedget里传入一个包含state的函数，而state的改变是在这个函数里，state就可以存在parent里了&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;重新创建一个同样的Widget成本并不高，因为Flutter framework会做diff&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;State也提供了一些常见的声明周期（&lt;a href=&quot;https://api.flutter.dev/flutter/widgets/State-class.html&quot;&gt;Doc&lt;/a&gt;）&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;deactivate&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;didUpdateWidget&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;dispose&lt;/code&gt; etc&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;存在Key作为widget的identity的概念，分siblings和glboal key, 都要求在各自可见范围内唯一。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/layout&quot;&gt;Building layout- 使用&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Widget是用来创建UI的类&lt;/li&gt;
+  &lt;li&gt;Widget可以被用来生成Layout和UI&lt;/li&gt;
+  &lt;li&gt;组合简单的widget可以产生复杂的widget&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;debugPaintSizeEnabled&lt;/code&gt; 可以渲染页面结构 &lt;a href=&quot;https://flutter.dev/docs/development/tools/devtools/inspector#debugging-layout-issues-visually&quot;&gt;UI debug doc&lt;/a&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;想要给view增加padding, margin, border, background color， 命名组件？（不理解） 都需要使用Container widget包裹&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Scaffold widget是Material的一种，提供了默认的banner吗backgroundcolor还提供了其他的接口。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Container: Adds padding, margins, borders, background color, or other decorations to a widget.&lt;/li&gt;
+  &lt;li&gt;GridView: Lays widgets out as a scrollable grid.&lt;/li&gt;
+  &lt;li&gt;ListView: Lays widgets out as a scrollable list.&lt;/li&gt;
+  &lt;li&gt;Stack: Overlaps a widget on top of another&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Stack 的逻辑和想的不一样，以为是类似listview的线性排列，其实是从下到上的覆盖逻辑， 第一个是baseview,后面的内容覆盖在baseview上&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;添加图片要先在&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pubspec.yaml&lt;/code&gt;里打开&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;assets&lt;/code&gt;配置, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pubspec.yaml&lt;/code&gt;里的配置是&lt;strong&gt;大小写敏感的&lt;/strong&gt;&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/layout/constraints&quot;&gt;Core rule: Constraints go down,  Size go up, Parent sets position. &lt;/a&gt; 值的一读&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;Widget可以在它parent允许的范围内决定自己的size&lt;/li&gt;
+  &lt;li&gt;Widget不知道也不能决定自己在screen的位置（position），位置是由parent决定的&lt;/li&gt;
+  &lt;li&gt;因为每个Widget的size和position都是由parent决定的，所以在遍历完整颗树前是不能知道某个Widget的精确大小和位置的。&lt;/li&gt;
+  &lt;li&gt;Widget是通过底层的RenderBox做渲染的&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/interactive&quot;&gt;Adding interactivity to your Flutter app&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;一个有状态的widget需要实现两个类的子类：StatefulWidget， States&lt;/li&gt;
+  &lt;li&gt;State可以由当前组件，父组件，混合的方式实现，由父组件管理状态时，一般是把状态做为子组件的参数传进去&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Asset 和 图片添加 &lt;a href=&quot;https://flutter.dev/docs/development/ui/assets-and-images&quot;&gt;link&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;可以通过  AssetBundle  loadString() 来load string/text 资源， load() 来load image/binary&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;可以通过import ‘package:flutter/services.dart’ show rootBundle; 来获取全局的AssertBundle&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;…/2.0x/my_icon.png, 系统会根据屏幕分辨率，自动选取合适的图片&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;。当主资源缺少某个文件时，会按分辨率从低到高的顺序去选择，也就是说 1x 中没有的话会在 2x 中找，2x 中还没有的话就在 3x 中找&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;设备像素比 取决于 MediaQueryData.size 的大小，它需要在祖先节点提供 MaterialApp 或者 CupertinoApp 作为 AssetImage 的祖先节点。 &lt;strong&gt;这是啥东西完全不理解&lt;/strong&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Android, iOS, flutter的资源文件可以互相访问&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;应用图标和启动图只能在Android, iOS工程里替换&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://medium.com/flutter/learning-flutters-new-navigation-and-routing-system-7c9068155ade&quot;&gt;路由和导航&lt;/a&gt; &lt;a href=&quot;https://blog.csdn.net/u013491829/article/details/109330086&quot;&gt;中文版&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;Router 1.0的组件有&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Navigator&lt;/li&gt;
+  &lt;li&gt;Router&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;匿名router是通过builder直接生成页面&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;routers 给的path只能固定字符串跳转，算是命名的router&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;onGenerateRoute(setting) 可以处理所有的router, 自己解析参数, setting是RouteSettings的实例&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Router 2.0的组件有&lt;/p&gt;
+
+&lt;p&gt;2.0好难理解&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Page 要展示的页面，Navigator会有一个pages的参数，可以声明压栈顺序&lt;/li&gt;
+  &lt;li&gt;Router&lt;/li&gt;
+  &lt;li&gt;RouteInformationParser&lt;/li&gt;
+  &lt;li&gt;RouterDelegate&lt;/li&gt;
+  &lt;li&gt;BackButtonDispatcher&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://miro.medium.com/max/1400/1*hNt4Bc8FZBp_Gqh7iED3FA.png&quot; /&gt;&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;RouteInformationParser, RouterDelegate 用来动态处理导航跳转&lt;/li&gt;
+  &lt;li&gt;TransitionDelegate 可以自定义导航动画&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Animations [https://flutter.dev/docs/development/ui/animations]
+暂时跳过， 不太理解，也很难用到&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;选择使用哪种Animation的路线图&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://flutter.dev/assets/ui/animations/animation-decision-tree-cf57f0d6c1b6fd8e7ea512bd659c2f97a2f142f1137e89d1f67a5fbc1be9f2c3.png&quot; /&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Advanced UI [https://flutter.dev/docs/development/ui/advanced/slivers]&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;1.(Slivers)[https://flutter.dev/docs/development/ui/advanced/slivers]
+SliverAppBar 感觉是一种会随着滑动变高或者完全隐藏的NavigationBar&lt;/p&gt;
+
+&lt;p&gt;SliverList
+SliverGrid&lt;/p&gt;
+
+</description>
+        <pubDate>Tue, 17 Nov 2020 19:28:00 +0800</pubDate>
+        <link>http://localhost:4000/2020/11/17/Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</link>
+        <guid isPermaLink="true">http://localhost:4000/2020/11/17/Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>Flutter</category>
         
         
       </item>
