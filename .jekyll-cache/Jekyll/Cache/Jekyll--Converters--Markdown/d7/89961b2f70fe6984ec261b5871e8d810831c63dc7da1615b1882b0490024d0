@@ -1,0 +1,173 @@
+I"�<h1 id="runtime中的数据结构">Runtime中的数据结构</h1>
+
+<h2 id="stripedmapobjc-privateh">StripedMap(objc-private.h)</h2>
+<p>在synchronized ,ARC的实现中都用到了这个结构
+SrtipedMap是一种根据传入指针将对象映射到数组不同位置的HashMap。
+其中映射算法为： 右移4位 &amp; 右移 9位 模8 （嵌入式系统）</p>
+
+<p>StripedMap 最特别的一点是针对CPU缓存进行了优化，在mac系统上，CPU line 的大小一般是64bytes,</p>
+
+<p>而PaddedT类型是将模板类型以64bytes对齐后的结构，这就保证了每个对象都有独立的CPU缓存单元，存入array的对象之间不会因为另外对象的修改需要读取内存，而是可以直接读取CPU缓存，提高读写速度。</p>
+
+<p>以下是StripedMap源码，留下了关键部分。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>// StripedMap&lt;T&gt; is a map of void* -&gt; T, sized appropriately
+// for cache-friendly lock striping.
+// For example, this may be used as StripedMap&lt;spinlock_t&gt;
+// or as StripedMap&lt;SomeStruct&gt; where SomeStruct stores a spin lock.
+template&lt;typename T&gt;
+class StripedMap {
+
+    enum { CacheLineSize = 64 };
+
+#if TARGET_OS_EMBEDDED
+    enum { StripeCount = 8 };
+#else
+    enum { StripeCount = 64 };
+#endif
+
+    struct PaddedT {
+        T value alignas(CacheLineSize);
+    };
+
+    PaddedT array[StripeCount];
+
+    static unsigned int indexForPointer(const void *p) {
+        uintptr_t addr = reinterpret_cast&lt;uintptr_t&gt;(p);
+        return ((addr &gt;&gt; 4) ^ (addr &gt;&gt; 9)) % StripeCount;
+    }
+
+ public:
+    T&amp; operator[] (const void *p) {
+        return array[indexForPointer(p)].value;
+    }
+    const T&amp; operator[] (const void *p) const {
+        return const_cast&lt;StripedMap&lt;T&gt;&gt;(this)[p];
+    }
+
+};
+
+</code></pre></div></div>
+
+<p>而StripedMap,顾名思义，条纹锁？为啥是条纹，我的理解是，StripedMap常常用于分离锁的结构，模板T的类型往往是一个链表（每个链表共用一个锁），多个链表结构看起来就比较像条纹了，脑洞仅供娱乐。</p>
+
+<h2 id="densemapllvm-densemaph">DenseMap(llvm-DenseMap.h)</h2>
+
+<p>这个家伙是用于引用计数的数据结构，本质是哈希表，和一般哈希表不同的是表的组织方法和冲突处理方式。</p>
+
+<p>下面用于记录对象retainCount的RefcountMap就是一个DenseMap.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct SideTable {
+    spinlock_t slock;
+    RefcountMap refcnts;
+    weak_table_t weak_table;
+}
+</code></pre></div></div>
+
+<p>DenseMap一开始是由谷歌提出的一种哈希算法（其实我感觉对于哈希来说更多的是冲突处理方法），很惊喜在苹果的llvm代码中可以看到苹果的实现。</p>
+
+<p>DenseMap的成员变量有</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  BucketT *Buckets;
+  unsigned NumEntries;
+  unsigned NumTombstones;
+  unsigned NumBuckets;
+</code></pre></div></div>
+
+<p>其中</p>
+
+<ul>
+  <li>BucketT 是std:pair结构，对DenseMap来说，key就是哈希键值，value就是真正要存入的对象,而pair的内存分布连续，键值对往往同时存在于cache line。</li>
+  <li>NumEntries 表明条目个数</li>
+  <li>NumTombstones 表示被删除的键值对个数</li>
+  <li>NumBuckets 表示Buckets个数</li>
+</ul>
+
+<p>接下来看看DenseMap最关键的冲突处理逻辑：
+即</p>
+
+<ul>
+  <li>首先获得Bucket指针和Bucket数</li>
+  <li>根据传入指针计算哈希值并以Bucket数取模的到BucketNo</li>
+  <li>循环查找
+    <ol>
+      <li>根据BucketNo找到键在Bucket中的偏移位置</li>
+      <li>如果该偏移位置有同样的键，则<strong>返回Bucket并认为找到</strong></li>
+      <li>如果该偏移位置是空的，则<strong>返回该Bucket并认为没找到</strong></li>
+      <li>如果该位置是空，并且上一次查到到了Tombstone，则<strong>返回Tombstone位置</strong></li>
+      <li>如果该位置是一个Tombstone并且从未找到过Tombstone,则记下这个位置</li>
+      <li>到这一步还没找到，则按照依次增加按序遍历后面的Bucket(这个逻辑和Google的实现不一致)</li>
+    </ol>
+  </li>
+</ul>
+
+<p>以下为源码</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>template&lt;typename LookupKeyT&gt;
+  bool LookupBucketFor(const LookupKeyT &amp;Val,
+                       const BucketT *&amp;FoundBucket) const {
+    const BucketT *BucketsPtr = getBuckets();
+    const unsigned NumBuckets = getNumBuckets();
+
+    if (NumBuckets == 0) {
+      FoundBucket = 0;
+      return false;
+    }
+
+    // FoundTombstone - Keep track of whether we find a tombstone or zero value while probing.
+    const BucketT *FoundTombstone = 0;
+    const KeyT EmptyKey = getEmptyKey();
+    const KeyT TombstoneKey = getTombstoneKey();
+    assert(!KeyInfoT::isEqual(Val, EmptyKey) &amp;&amp;
+           !KeyInfoT::isEqual(Val, TombstoneKey) &amp;&amp;
+           "Empty/Tombstone value shouldn't be inserted into map!");
+
+    unsigned BucketNo = getHashValue(Val) &amp; (NumBuckets-1);
+    unsigned ProbeAmt = 1;
+    while (1) {
+      const BucketT *ThisBucket = BucketsPtr + BucketNo;
+      // Found Val's bucket?  If so, return it.
+      if (KeyInfoT::isEqual(Val, ThisBucket-&gt;first)) {
+        FoundBucket = ThisBucket;
+        return true;
+      }
+
+      // If we found an empty bucket, the key doesn't exist in the set.
+      // Insert it and return the default value.
+      if (KeyInfoT::isEqual(ThisBucket-&gt;first, EmptyKey)) {
+        // If we've already seen a tombstone while probing, fill it in instead
+        // of the empty bucket we eventually probed to.
+        if (FoundTombstone) ThisBucket = FoundTombstone;
+        FoundBucket = FoundTombstone ? FoundTombstone : ThisBucket;
+        return false;
+      }
+
+      // If this is a tombstone, remember it.  If Val ends up not in the map, we
+      // prefer to return it than something that would require more probing.
+      // Ditto for zero values.
+      if (KeyInfoT::isEqual(ThisBucket-&gt;first, TombstoneKey) &amp;&amp; !FoundTombstone)
+        FoundTombstone = ThisBucket;  // Remember the first tombstone found.
+      if (ZeroValuesArePurgeable  &amp;&amp;
+          ThisBucket-&gt;second == 0  &amp;&amp;  !FoundTombstone)
+        FoundTombstone = ThisBucket;
+
+      // Otherwise, it's a hash collision or a tombstone, continue quadratic
+      // probing.
+      if (ProbeAmt &gt; NumBuckets) {
+          // No empty buckets in table. Die.
+          _objc_fatal("Hash table corrupted. This is probably a memory error "
+                      "somewhere. (table at %p, buckets at %p (%zu bytes), "
+                      "%u buckets, %u entries, %u tombstones, "
+                      "data %p %p %p %p)",
+                      this, BucketsPtr, malloc_size(BucketsPtr),
+                      NumBuckets, getNumEntries(), getNumTombstones(),
+                      ((void**)BucketsPtr)[0], ((void**)BucketsPtr)[1],
+                      ((void**)BucketsPtr)[2], ((void**)BucketsPtr)[3]);
+      }
+      BucketNo += ProbeAmt++;
+      BucketNo&amp;= (NumBuckets-1);
+    }
+  }
+</code></pre></div></div>
+
+:ET

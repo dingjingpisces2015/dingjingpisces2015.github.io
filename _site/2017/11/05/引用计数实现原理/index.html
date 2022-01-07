@@ -211,13 +211,13 @@
 
 <ul>
   <li>如果是TaggedPointer不做任何处理
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (isTaggedPointer()) return (id)this;
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (isTaggedPointer()) return (id)this;
 </code></pre></div>    </div>
   </li>
   <li>判断是否是指针，如果是指针，直接放入SideTable进行引用计数</li>
 </ul>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (slowpath(!newisa.nonpointer)) { //如果newisa.nopointer = falae,即isa是个指针
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (slowpath(!newisa.nonpointer)) { //如果newisa.nopointer = falae,即isa是个指针
             ClearExclusive(&amp;isa.bits);//这个函数啥都不做，是空的
             if (!tryRetain &amp;&amp; sideTableLocked) sidetable_unlock();//以self为参数，解锁这组sideTable
             if (tryRetain) return sidetable_tryRetain() ? (id)this : nil;
@@ -231,21 +231,21 @@
   <li>
     <p>非指针情况，在isa的extra_RC位进行引用计数加一</p>
 
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>newisa.bits = addc(newisa.bits, RC_ONE, 0, &amp;carry);  // extra_rc++ 在extra_rc位上+1
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>newisa.bits = addc(newisa.bits, RC_ONE, 0, &amp;carry);  // extra_rc++ 在extra_rc位上+1
 </code></pre></div>    </div>
 
     <ul>
       <li>如果没有溢出，保存新的isa</li>
     </ul>
 
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>slowpath(!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits))
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>slowpath(!StoreExclusive(&amp;isa.bits, oldisa.bits, newisa.bits))
 </code></pre></div>    </div>
 
     <ul>
       <li>如果溢出了，将extra_rc的一半值存入sideTable，has_sidetable_rc置1</li>
     </ul>
 
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (slowpath(carry)) { //如果溢出了
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if (slowpath(carry)) { //如果溢出了
           // newisa.extra_rc++ overflowed
           if (!handleOverflow) { //retain方法调用中传入true
               ClearExclusive(&amp;isa.bits);
@@ -383,7 +383,7 @@ if (slowpath(transcribeToSideTable)) {
                     <div class="tags">
         				
                             
-                				<a href="/tags/#技术" title="技术" rel="7">
+                				<a href="/tags/#技术" title="技术" rel="8">
                                     技术
                                 </a>
                             
@@ -391,7 +391,7 @@ if (slowpath(transcribeToSideTable)) {
                             
         				
                             
-                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="7">
                                     iOS开发
                                 </a>
                             
@@ -407,15 +407,19 @@ if (slowpath(transcribeToSideTable)) {
                             
         				
                             
-                				<a href="/tags/#源码" title="源码" rel="3">
+                				<a href="/tags/#源码" title="源码" rel="4">
                                     源码
                                 </a>
                             
         				
                             
-                				<a href="/tags/#runtime" title="runtime" rel="2">
+                				<a href="/tags/#runtime" title="runtime" rel="3">
                                     runtime
                                 </a>
+                            
+        				
+                            
+        				
                             
         				
         			</div>
@@ -535,7 +539,7 @@ if (slowpath(transcribeToSideTable)) {
                     
                 </ul>
                 <p class="copyright text-muted">
-                    Copyright &copy; D Tech Blog 2017
+                    Copyright &copy; D Tech Blog 2022
                     <br>
                     <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
             <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>

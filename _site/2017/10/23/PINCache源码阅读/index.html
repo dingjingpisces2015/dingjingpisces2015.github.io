@@ -207,25 +207,25 @@
 
 <p>在开发过程中我们常常会写出下面的代码：</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>NSArray *array = @[1,2,3];
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>NSArray *array = @[1,2,3];
 NSNubmer *one = array[1]; // 1
 
 NSDictioanry *friend = @{@"li":@"han", @"zhang":@"xiao"};
 NSString *li = name[@"li"] //@"han"
 </code></pre></div></div>
-<p>对NSArray, NSDictionary的对象使用了<code class="highlighter-rouge">[]</code>直接存取，这种存取方式就叫做<strong>Object Subscriping</strong>.</p>
+<p>对NSArray, NSDictionary的对象使用了<code class="language-plaintext highlighter-rouge">[]</code>直接存取，这种存取方式就叫做<strong>Object Subscriping</strong>.</p>
 
 <p>Clang6支持两类subscripting访问， array-style(整数访问) ,dictionary-style（对象访问），当使用下标访问时，会调用对应的方法，一个类可以同时支持整数/对象下标访问。</p>
 
 <p>整数下标访问需要声明并实现 整数访问支持全部正负整数</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectAtIndexedSubscript:(NSInteger)number
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectAtIndexedSubscript:(NSInteger)number
 - (void)setObject:(id)object atIndexedSubscript:(NSInteger)number  
 </code></pre></div></div>
 
 <p>字典下标访问对应</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectForKeyedSubscript:(id)subscript
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (nullable id)objectForKeyedSubscript:(id)subscript
 - (void)setObject::(id)object forKeyedSubscript:(id)subscript 
 </code></pre></div></div>
 
@@ -240,7 +240,7 @@ NSString *li = name[@"li"] //@"han"
 保证在不设置并行变量的情况下，顺序执行，否则并行执行。
 主要操作有:</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>- (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
 
 - (id &lt;PINOperationReference&gt;)addOperation:(dispatch_block_t)block withPriority:(PINOperationQueuePriority)priority
 {
@@ -335,7 +335,7 @@ NSString *li = name[@"li"] //@"han"
 
 <p>PINCache中包含了PINMemoryCache，PINDiskCache，执行将内存缓存异步同步到硬盘缓存的操作，如下</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步读取
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步读取
 - (void)objectForKeyAsync:(NSString *)key completion:(PINCacheObjectBlock)block
 {
     if (!key || !block)
@@ -380,7 +380,7 @@ NSString *li = name[@"li"] //@"han"
 }
 </code></pre></div></div>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步设置
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//异步设置
 - (void)setObjectAsync:(id &lt;NSCoding&gt;)object forKey:(NSString *)key withCost:(NSUInteger)cost completion:(PINCacheObjectBlock)block
 {
     if (!key || !object)
@@ -456,9 +456,9 @@ P... | D Tech Blog " >
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/" data-toggle="tooltip" data-placement="top" title="iOS开发技能树整理">
+                        <a href="/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/" data-toggle="tooltip" data-placement="top" title="iOS开发技能树整理x">
                         Previous<br>
-                        <span>iOS开发技能树整理</span>
+                        <span>iOS开发技能树整理x</span>
                         </a>
                     </li>
                     
@@ -520,7 +520,7 @@ P... | D Tech Blog " >
                     <div class="tags">
         				
                             
-                				<a href="/tags/#技术" title="技术" rel="7">
+                				<a href="/tags/#技术" title="技术" rel="8">
                                     技术
                                 </a>
                             
@@ -528,7 +528,7 @@ P... | D Tech Blog " >
                             
         				
                             
-                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="7">
                                     iOS开发
                                 </a>
                             
@@ -544,15 +544,19 @@ P... | D Tech Blog " >
                             
         				
                             
-                				<a href="/tags/#源码" title="源码" rel="3">
+                				<a href="/tags/#源码" title="源码" rel="4">
                                     源码
                                 </a>
                             
         				
                             
-                				<a href="/tags/#runtime" title="runtime" rel="2">
+                				<a href="/tags/#runtime" title="runtime" rel="3">
                                     runtime
                                 </a>
+                            
+        				
+                            
+        				
                             
         				
         			</div>
@@ -672,7 +676,7 @@ P... | D Tech Blog " >
                     
                 </ul>
                 <p class="copyright text-muted">
-                    Copyright &copy; D Tech Blog 2017
+                    Copyright &copy; D Tech Blog 2022
                     <br>
                     <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
             <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>

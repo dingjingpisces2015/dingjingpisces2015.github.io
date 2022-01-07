@@ -218,24 +218,24 @@
 
 <p>拥有两个属性，一个方法的Test类</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">@interface</span> <span class="nc">Test</span> <span class="p">:</span> <span class="nc">NSObject</span>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>@interface Test : NSObject
 
-<span class="k">@property</span> <span class="n">NSString</span> <span class="o">*</span><span class="n">str</span><span class="p">;</span>
-<span class="k">@property</span> <span class="n">NSObject</span> <span class="o">*</span><span class="n">obj</span><span class="p">;</span>
-<span class="k">-</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">doSomething</span><span class="p">;</span>
+@property NSString *str;
+@property NSObject *obj;
+- (void)doSomething;
 
-<span class="k">@end</span>
+@end
 
 </code></pre></div></div>
 
 <p>经过转换，首先可以看到定义了</p>
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>typedef struct objc_object Test;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>typedef struct objc_object Test;
 </code></pre></div></div>
-<p>即Test的结构和objc_object相同，而objc_object本身只有一个<code class="highlighter-rouge">isa</code>指针</p>
+<p>即Test的结构和objc_object相同，而objc_object本身只有一个<code class="language-plaintext highlighter-rouge">isa</code>指针</p>
 
-<p>接着定义实例变量结构体,如下，可以看到继承自NSObject的成员变量排列在最前方（<code class="highlighter-rouge">NSObject_IVARS</code>），<code class="highlighter-rouge">Test</code>类中的成员变量按声明顺序排列</p>
+<p>接着定义实例变量结构体,如下，可以看到继承自NSObject的成员变量排列在最前方（<code class="language-plaintext highlighter-rouge">NSObject_IVARS</code>），<code class="language-plaintext highlighter-rouge">Test</code>类中的成员变量按声明顺序排列</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct Test_IMPL {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct Test_IMPL {
      struct NSObject_IMPL NSObject_IVARS; 
      NSString *_str;
      NSObject *_obj;
@@ -244,7 +244,7 @@
 
 <p>之后将所有方法声明成静态变量，其实可以看做类似于C++对象的成员函数，</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static void _I_Test_doSomething(Test * self, SEL _cmd) {}
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static void _I_Test_doSomething(Test * self, SEL _cmd) {}
 
 static NSString * _I_Test_str(Test * self, SEL _cmd) { return (*(NSString **)((char *)self + OBJC_IVAR_$_Test$_str)); }
 static void _I_Test_setStr_(Test * self, SEL _cmd, NSString *str) { (*(NSString **)((char *)self + OBJC_IVAR_$_Test$_str)) = str; }
@@ -255,12 +255,12 @@ static void _I_Test_setObj_(Test * self, SEL _cmd, NSObject *obj) { (*(NSObject 
 
 <p>接着定义了实例变量列表结构，其中OBJC_IVAR_$_Test$_str 是实例变量_str所在偏移</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>extern "C" unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section ("__DATA,__objc_ivar"))) = __OFFSETOFIVAR__(struct Test, _str);
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>extern "C" unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section ("__DATA,__objc_ivar"))) = __OFFSETOFIVAR__(struct Test, _str);
 </code></pre></div></div>
 
 <p>以下_OBJC_$_INSTANCE_VARIABLES_Test的内存布局和_ivar_list_t结构完全一致，记录了Test类中实例变量偏移位置。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static struct /*_ivar_list_t*/ 
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static struct /*_ivar_list_t*/ 
      unsigned int entsize;  // sizeof(struct _prop_t)
      unsigned int count;
      struct _ivar_t ivar_list[2];
@@ -276,7 +276,7 @@ static void _I_Test_setObj_(Test * self, SEL _cmd, NSObject *obj) { (*(NSObject 
 
 <p>接下来看，可以发现编译后的代码还生成了方法结构体，和属性列表</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//定义方法结构体
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//定义方法结构体
 static struct /*_method_list_t*/ {
      unsigned int entsize;  // sizeof(struct _objc_method)
      unsigned int method_count;
@@ -292,7 +292,7 @@ static struct /*_method_list_t*/ {
 };
 </code></pre></div></div>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//定义属性列表
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//定义属性列表
 static struct /*_prop_list_t*/ {
      unsigned int entsize;  // sizeof(struct _prop_t)
      unsigned int count_of_properties;
@@ -307,7 +307,7 @@ static struct /*_prop_list_t*/ {
 
 <p>接下来cpp中定义类一个将方法列表，变量列表，属性列表整合起来的一个类,<em>OBJC_CLASS_RO</em>$_Test 但这个类的布局看起来和objc_class并不一致</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static struct _class_ro_t _OBJC_CLASS_RO_$_Test __attribute__ ((used, section ("__DATA,__objc_const"))) = {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static struct _class_ro_t _OBJC_CLASS_RO_$_Test __attribute__ ((used, section ("__DATA,__objc_const"))) = {
      0, __OFFSETOFIVAR__(struct Test, _str), sizeof(struct Test_IMPL),
      (unsigned int)0,
      0,
@@ -323,7 +323,7 @@ static struct /*_prop_list_t*/ {
 <p>之后便出现了真正的类定义，将上述_OBJC_CLASS_RO_$<em>Test赋值给OBJC_CLASS</em>$<em>Test，元类同理,当一个类定义文件没被引入工程时，常常能看到诸如
 “_OBJC_CLASS</em>$<em>XXClass, referenced from:xxx “这类的错误提示，正是因为该类在符号表中的名字实际是_OBJC_CLASS</em>$_XXClass（下面的代码中可以看到通过dllexport在链接时导出了），而不是我们在.m文件中定义的名字。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>extern "C" __declspec(dllexport) struct _class_t OBJC_CLASS_$_Test __attribute__ ((used, section ("__DATA,__objc_data"))) = {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>extern "C" __declspec(dllexport) struct _class_t OBJC_CLASS_$_Test __attribute__ ((used, section ("__DATA,__objc_data"))) = {
      0, // &amp;OBJC_METACLASS_$_Test,
      0, // &amp;OBJC_CLASS_$_NSObject,
      0, // (void *)&amp;_objc_empty_cache,
@@ -335,7 +335,7 @@ static struct /*_prop_list_t*/ {
 <p>再仔细观察，OBJC_CLASS_$_Test是struct _class_t结构，而struct _class_t结构如下,
 和objc_class对比可以发现，</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct _class_t {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct _class_t {
 	struct _class_t *isa;
 	struct _class_t *superclass;
 	void *cache;
@@ -366,7 +366,7 @@ struct objc_class : objc_object {
   <li>cache和vtable分别是两个指针大小，而cache_t结构为</li>
 </ul>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct cache_t {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct cache_t {
     struct bucket_t *_buckets;
     mask_t _mask;
     mask_t _occupied;
@@ -382,23 +382,23 @@ struct objc_class : objc_object {
 
 <p>对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$<em>Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO</em>$_Test结构在</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class_rw_t *data() { 
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>class_rw_t *data() { 
         return bits.data();
     } 
 </code></pre></div></div>
 <p>方法中返回，而bits.data()方法的返回值为bits&amp;FAST_DATA_MASK （这个FAST_DATA_MASK</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#define FAST_DATA_MASK          0x00007ffffffffff8UL
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#define FAST_DATA_MASK          0x00007ffffffffff8UL
 </code></pre></div></div>
 
 <p>从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与</p>
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> taggedPoint
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> taggedPoint
 </code></pre></div></div>
 <p>区分，前面为何是0还是不能理解）</p>
 
 <p>Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct class_rw_t {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct class_rw_t {
     // Be warned that Symbolication knows the layout of this structure.
     uint32_t flags;
     uint32_t version;
@@ -423,7 +423,7 @@ struct objc_class : objc_object {
 
 <p>通过仔细阅读runtime源码，发现了__read_images方法，为了更清晰的表述，下面提取出了__read_images中读取类结构数据的部分代码</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
 {
 
 //...
@@ -457,11 +457,11 @@ struct objc_class : objc_object {
 </code></pre></div></div>
 
 <p>读入类数据的代码为</p>
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_getObjc2ClassList 
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_getObjc2ClassList 
 </code></pre></div></div>
 <p>,跳到定义可以看到</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GETSECT(_getObjc2ClassList,           classref_t,      "__objc_classlist");
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GETSECT(_getObjc2ClassList,           classref_t,      "__objc_classlist");
 //等价于
 type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) { 
  return getDataSection&lt;classref_t&gt;(mhdr, __objc_classlist, nil, outCount); 
@@ -469,10 +469,10 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
 
 </code></pre></div></div>
 
-<p>可以看到<code class="highlighter-rouge">_getObjc2ClassList</code>读了数据段中的__objc_classlist,
+<p>可以看到<code class="language-plaintext highlighter-rouge">_getObjc2ClassList</code>读了数据段中的__objc_classlist,
 在rewrite后的cpp中搜索__objc_classlist可以看到</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section ("__DATA, __objc_classlist,regular,no_dead_strip")))= {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section ("__DATA, __objc_classlist,regular,no_dead_strip")))= {
 	&amp;OBJC_CLASS_$_Test,
 };
 </code></pre></div></div>
@@ -585,7 +585,7 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
                     <div class="tags">
         				
                             
-                				<a href="/tags/#技术" title="技术" rel="7">
+                				<a href="/tags/#技术" title="技术" rel="8">
                                     技术
                                 </a>
                             
@@ -593,7 +593,7 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
                             
         				
                             
-                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="7">
                                     iOS开发
                                 </a>
                             
@@ -609,15 +609,19 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
                             
         				
                             
-                				<a href="/tags/#源码" title="源码" rel="3">
+                				<a href="/tags/#源码" title="源码" rel="4">
                                     源码
                                 </a>
                             
         				
                             
-                				<a href="/tags/#runtime" title="runtime" rel="2">
+                				<a href="/tags/#runtime" title="runtime" rel="3">
                                     runtime
                                 </a>
+                            
+        				
+                            
+        				
                             
         				
         			</div>
@@ -737,7 +741,7 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
                     
                 </ul>
                 <p class="copyright text-muted">
-                    Copyright &copy; D Tech Blog 2017
+                    Copyright &copy; D Tech Blog 2022
                     <br>
                     <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
             <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>

@@ -10,9 +10,9 @@
     <meta name="keywords"  content="dingjingpisces2015">
     <link rel="shortcut icon" href="/img/favicon.ico">
 
-    <title>iOS开发技能树整理x - D Tech Blog</title>
+    <title>Autorelease的实现原理 - D Tech Blog</title>
 
-    <link rel="canonical" href="http://localhost:4000/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/">
+    <link rel="canonical" href="http://localhost:4000/2017/11/27/Autorelease%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/css/bootstrap.min.css">
@@ -167,13 +167,17 @@
                         
                         <a class="tag" href="/tags/#iOS开发" title="iOS开发">iOS开发</a>
                         
+                        <a class="tag" href="/tags/#runtime" title="runtime">runtime</a>
+                        
+                        <a class="tag" href="/tags/#源码" title="源码">源码</a>
+                        
                     </div>
-                    <h1>iOS开发技能树整理x</h1>
+                    <h1>Autorelease的实现原理</h1>
                     
                     
                     <h2 class="subheading"></h2>
                     
-                    <span class="meta">Posted by dingjingpisces on March 21, 2017</span>
+                    <span class="meta">Posted by dingjingpisces on November 27, 2017</span>
                 </div>
             </div>
         </div>
@@ -192,14 +196,111 @@
                 post-container">
                 <span class="meta" id="copyright"></span>
                 <script> document.getElementById("copyright").innerHTML = "文章欢迎转载，但转载时请保留本段文字，并置于文章的顶部 作者：dingjingpisces 本文原文地址:" + decodeURI(window.location.href)</script>
-				<h1 id="ios开发技能树整理">iOS开发技能树整理</h1>
+				<h1 id="autorelease的实现原理">Autorelease的实现原理</h1>
 
-<p>最近一大波事情忙完，突然闲下来，简单的整理了一下iOS开发相关的技能树。</p>
+<p>Autorelease是苹果为开发者提供的用于垃圾回收的API，实现了在每个Runloop结束后自动释放无人引用的内存的功能。默认生成的代码会把我们要执行的代码包裹在AutoreleasePool里，在编译器的配合下，很多时候甚至感觉不到垃圾回收的存在。这篇文章希望通过源码分析Autorelease的实现原理。</p>
 
-<p>计划以后不断更新，点亮这颗技能树。</p>
+<h2 id="使用场景">使用场景</h2>
 
-<p><img src="https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/raw/master/img/blog/2017.03.21/iOS_tech_tree.png" alt="我的技能树" /></p>
+<p>我理解，Autorelease的使用时机有两种：</p>
 
+<ol>
+  <li>开发者手动将变量加入AutoreleasePool；</li>
+  <li>函数返回时，如果有返回对象，编译器自动添加到AutoreleasePool;</li>
+</ol>
+
+<h2 id="关于返回值的优化">关于返回值的优化</h2>
+
+<p>对于第2中情况，苹果做了优化，对象的引用计数不直接添加在AutoreleasePage里，而是经过TLS中转，直接传递给调用方，这么做还可以避免两侧多余的Retain,Release操作。具体逻辑如下.</p>
+
+<p>被优化后的的被调用方(callee)会查看紧跟在return后的调用方(caller)指令。如果caller的指令也是经过优化的，那么callee会跳过所有引用计数操作（no autorelease,no retain release）。而是在TLS中设置标志位，经过优化的caller会查看TLS，如果发现设置了TLS值，则不对返回对象进行retain/release等操作，而是根据TLS中的值设置retainCount.</p>
+
+<p>在runtime源码中，被优化的两个callee是：
+objc_autoreleaseReturnValue  flag设置+1
+objc_retainAutoreleaseReturnValue  flag设置+0</p>
+
+<p>被优化的两个caller是：
+objc_retainAutoreleasedReturnValue 调用者希望TLS值是+1
+objc_unsafeClaimAutoreleasedRetainValue 调用者希望TLS值是+0</p>
+
+<p>如:
+Callee:
+     return objc_autoreleaseReturnValue(ret)；// flag=1
+Caller:
+     ret = callee();
+     ret = objc_retainAutoreleasedReturnValue(ret); //直接得到ret</p>
+
+<p>Callee发现了优化的caller,设置TLS为+1
+Caller查看TLS，清空，此时在没有retain, autorelease的情况下，callee,caller合作使ret得引用计数依然正确。</p>
+
+<p>根据系统的不同，callee会识别一些特殊的机器码。</p>
+
+<h2 id="autoreleasepage">AutoreleasePage</h2>
+
+<p>Autorelease的实现数据结构是AutoreleasePage.AutoreleasePage中的地址，以数组形式组织，而AutoreleasePage本身以链表形式组织。
+最新的Page称为hotPage,存储在TLS中，当新增一个obj到自动释放池时，如果hotPage已满或者不存在，会新生成一个Page，添加到原有链表中，并将该Page设置为hotPage</p>
+
+<p>如下图所示：
+<img src="https://raw.githubusercontent.com/dingjingpisces2015/dingjingpisces2015.github.io/master/img/autoreleasePage.png" alt="AutoreleasePage" /></p>
+
+<h2 id="数据操作-pushpop">数据操作 (Push/Pop)</h2>
+
+<h3 id="push">Push</h3>
+<p>向自动释放池中添加一个对象，代码如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static inline void *push()
+    {
+        id *dest;
+        if (DebugPoolAllocation) {
+            // Each autorelease pool starts on a new pool page.
+            dest = autoreleaseNewPage(POOL_BOUNDARY);
+        } else {
+            dest = autoreleaseFast(POOL_BOUNDARY);
+        }
+        assert(dest == EMPTY_POOL_PLACEHOLDER || *dest == POOL_BOUNDARY);
+        return dest;
+</code></pre></div></div>
+
+<p>DebugPoolAllocation在不存在AutoreleasePage且可调试的情况下触发，一般而言会走到else的逻辑，即autoreleaseFast,这个函数如下</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>static inline id *autoreleaseFast(id obj)
+    {
+        AutoreleasePoolPage *page = hotPage();
+        if (page &amp;&amp; !page-&gt;full()) {
+            return page-&gt;add(obj);
+        } else if (page) {
+            return autoreleaseFullPage(obj, page);
+        } else {
+            return autoreleaseNoPage(obj);
+        }
+    }
+</code></pre></div></div>
+
+<p>可以看到，这个函数</p>
+
+<ul>
+  <li>首先从TLS中取出了当前正在使用的hotPage,并且在页面不满的情况下，向page中添加这个对象，即向next数组中添加了obj</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   id *add(id obj)
+    {
+        id *ret = next;  // faster than `return next-1` because of aliasing
+        *next++ = obj;
+        return ret;
+    }
+</code></pre></div></div>
+
+<ul>
+  <li>当hotPage存在时，调用autoreleaseFullPage方法，生成一个新的page设置为hotPage,并将obj add到这个新hotPage中</li>
+  <li>其他情况下，调用autoreleaseNoPage方法，判断一些极端情况，在逻辑无误的情况下还是生成新page并添加对象</li>
+</ul>
+
+<h3 id="pop">Pop</h3>
+<p>Pop的实现与Push类似，都是对Page及next指针的操作。比较特别的是pop可以带一个token进去，实现释放对象，直至这个token位置的功能，
+其做法是首先倒叙释放hotPage的next指针对象，如果Page中的next数组中对象全部释放，且没到token位置，那么继续释放Page直到该位置。</p>
+
+<h2 id="总结">总结</h2>
+<p>AutoreleasePage的数据组织结构十分清晰，比较特别的是看到了AutoreleasePage释放后指针是0xA3A3A3A3，以及结合以前代码，看到了大量的对TLS的使用。</p>
 
 
                 <hr>
@@ -209,19 +310,13 @@
                 </style>
                 <div class="ds-share"
                     style="text-align: right"
-                    data-thread-key="/2017/03/21/iOS开发技能树整理"
-                    data-title="iOS开发技能树整理x"
-                    data-url="http://localhost:4000/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/"
+                    data-thread-key="/2017/11/27/Autorelease的实现原理"
+                    data-title="Autorelease的实现原理"
+                    data-url="http://localhost:4000/2017/11/27/Autorelease%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/"
                     data-images="http://localhost:4000/img/post-bg-2015.jpg"
-                    data-content="iOS开发技能树整理
+                    data-content="Autorelease的实现原理
 
-最近一大波事情忙完，突然闲下来，简单的整理了一下iOS开发相关的技能树。
-
-计划以后不断更新，点亮这颗技能树。
-
-
-
- | D Tech Blog " >
+Autorelease是苹果为开发者提供的用于垃圾回收的API，实现了在每个Runloop结束后自动释放无人引用的内存... | D Tech Blog " >
                     <div class="ds-share-inline">
                       <ul  class="ds-share-icons-16">
                         <li data-toggle="ds-share-icons-more"><a class="ds-more" href="#">分享到：</a></li>
@@ -241,17 +336,17 @@
                 <ul class="pager">
                     
                     <li class="previous">
-                        <a href="/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/" data-toggle="tooltip" data-placement="top" title="有关浮点数的那些事">
+                        <a href="/2017/11/20/runtime%E4%B8%AD%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" data-toggle="tooltip" data-placement="top" title="Runtime中的数据结构">
                         Previous<br>
-                        <span>有关浮点数的那些事</span>
+                        <span>Runtime中的数据结构</span>
                         </a>
                     </li>
                     
                     
                     <li class="next">
-                        <a href="/2017/10/23/PINCache%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" data-toggle="tooltip" data-placement="top" title="PINCache源码阅读">
+                        <a href="/2019/05/14/Airbnb%E5%88%B7%E9%A2%98%E6%80%BB%E7%BB%93/" data-toggle="tooltip" data-placement="top" title="Airbnb刷题整理">
                         Next<br>
-                        <span>PINCache源码阅读</span>
+                        <span>Airbnb刷题整理</span>
                         </a>
                     </li>
                     
@@ -262,9 +357,9 @@
                 <!-- 多说评论框 start -->
                 <div class="comment">
                     <div class="ds-thread"
-                        data-thread-key="/2017/03/21/iOS开发技能树整理"
-                        data-title="iOS开发技能树整理x"
-                        data-url="http://localhost:4000/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/" >
+                        data-thread-key="/2017/11/27/Autorelease的实现原理"
+                        data-title="Autorelease的实现原理"
+                        data-url="http://localhost:4000/2017/11/27/Autorelease%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" >
                     </div>
                 </div>
                 <!-- 多说评论框 end -->

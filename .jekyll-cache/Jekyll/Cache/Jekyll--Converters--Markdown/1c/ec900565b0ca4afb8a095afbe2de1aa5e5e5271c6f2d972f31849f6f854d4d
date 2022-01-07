@@ -1,0 +1,304 @@
+I"\0<h1 id="有关浮点数的那些事">有关浮点数的那些事</h1>
+
+<h2 id="几个小问题">几个小问题</h2>
+
+<ol>
+  <li>浮点数可以准确表示0吗？</li>
+  <li>浮点数精度为什么是1.19092896-e7</li>
+  <li>浮点数是否可以判等？</li>
+  <li>下面两段代码的运行速度如何</li>
+</ol>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   const float x = 1.1;
+   const float z = 1.111;
+   float y = x;
+   for(int j = 0; j &lt; 10000000; j++)
+   {
+       y *= x;
+       y /= z;
+       y += 0;
+       y -= 0;
+   }
+   return 0;
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   const float x = 1.1;
+   const float z = 1.111;
+   float y = x;
+   for(int j = 0; j &lt; 10000000; j++)
+   {
+       y *= x;
+       y /= z;
+       y += 0.1;
+       y -= 0.1;
+   }
+</code></pre></div></div>
+<p>本文会从浮点数的表示方法入手回答一下上面的几个问题。</p>
+
+<h2 id="浮点数的表示方法">浮点数的表示方法</h2>
+
+<p>IEEE-754对浮点数的定义如下</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">Type</th>
+      <th style="text-align: center">Sign</th>
+      <th style="text-align: center">Actual Exponent</th>
+      <th style="text-align: center">Exp (biased)</th>
+      <th style="text-align: center">Exponent field</th>
+      <th style="text-align: center">Significand (fraction field)</th>
+      <th style="text-align: center">Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center">Zero</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">−127</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">0.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Negative zero</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">−127</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">−0.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">One</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">127</td>
+      <td style="text-align: center">0111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">1.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Minus One</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">127</td>
+      <td style="text-align: center">0111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">−1.0</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Smallest denormalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0001</td>
+      <td style="text-align: center">±2−23 × 2−126 = ±2−149 ≈ ±1.4×10−45</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">“Middle” denormalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">100 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">±2−1 × 2−126 = ±2−127 ≈ ±5.88×10−39</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Largest denormalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">0000 0000</td>
+      <td style="text-align: center">111 1111 1111 1111 1111 1111</td>
+      <td style="text-align: center">±(1−2−23) × 2−126 ≈ ±1.18×10−38</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Smallest normalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">−126</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">0000 0001</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">±2−126 ≈ ±1.18×10−38</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Largest normalized number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">127</td>
+      <td style="text-align: center">254</td>
+      <td style="text-align: center">1111 1110</td>
+      <td style="text-align: center">111 1111 1111 1111 1111 1111</td>
+      <td style="text-align: center">±(2−2−23) × 2127 ≈ ±3.4×1038</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Positive infinity</td>
+      <td style="text-align: center">0</td>
+      <td style="text-align: center">128</td>
+      <td style="text-align: center">255</td>
+      <td style="text-align: center">1111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">+∞</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Negative infinity</td>
+      <td style="text-align: center">1</td>
+      <td style="text-align: center">128</td>
+      <td style="text-align: center">255</td>
+      <td style="text-align: center">1111 1111</td>
+      <td style="text-align: center">000 0000 0000 0000 0000 0000</td>
+      <td style="text-align: center">−∞</td>
+    </tr>
+    <tr>
+      <td style="text-align: center">Not a number</td>
+      <td style="text-align: center">*</td>
+      <td style="text-align: center">128</td>
+      <td style="text-align: center">255</td>
+      <td style="text-align: center">1111 1111</td>
+      <td style="text-align: center">non zero</td>
+      <td style="text-align: center">NaN</td>
+    </tr>
+  </tbody>
+</table>
+
+<ul>
+  <li>Sign bit can be either 0 or 1 .</li>
+</ul>
+
+<p>从上述定义中可以回答第一个问题：<strong>浮点数可以精确表示0</strong>，用代码验证即</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float zero1 = 0.0;
+float zero2 = 0.0;
+if (zero1 == zero2) 
+{
+	printf(@"zero1 = zero2"); //must setup in if block
+}
+</code></pre></div></div>
+
+<p>总结<strong>浮点数定义的规律</strong>如下：</p>
+
+<ul>
+  <li>指数位为00000000时，
+    <ol>
+      <li>数字位为全0时，若符号位为0，则表示正零0.0 ；若符号位为1时，表示负零-0.0</li>
+      <li>数字位不全为零，表示非标浮点数(denormalized number)，此时默认第一位不是1，而是0（标准浮点数为了更大限度的表示数字，认为数字位都是小数点之后的数，并且默认小数点前一位为1）</li>
+    </ol>
+  </li>
+  <li>指数位为11111111时，
+    <ol>
+      <li>数字为全为0时，若符号位为0 ，则表示正无穷，若符号位为1，则表示负无穷</li>
+      <li>数字为补全为0，表示这不是一个数NaN</li>
+    </ol>
+  </li>
+  <li>因此指数位范围为00000001~11111110 （1~254）
+    <ol>
+      <li>而为了表示小数部分，指数部分需要减127，因此，指数实际范围为-126~127，标准浮点数指数能表示的范围也就是 2^-126 ~2^127</li>
+    </ol>
+  </li>
+</ul>
+
+<h2 id="浮点数的精度">浮点数的精度</h2>
+
+<p>浮点数的精度宏FLT_EPSILON = 1.19092896-e7。
+IEEE对FLT_EPSILON的定义为</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
+</code></pre></div></div>
+
+<p>再回到上一章看浮点数，1.0 = 指数位和数字为都为0的数，即</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">指数位</th>
+      <th style="text-align: center">数字位</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center">01111111</td>
+      <td style="text-align: center">000…0000</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>而满足上述定义的数只能是在数字位加1的数,即</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: center">指数位</th>
+      <th style="text-align: center">数字位</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: center">01111111</td>
+      <td style="text-align: center">000…000<strong>1</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>表示出来即2<sup>-23</sup> = 1.19092896-e7.</p>
+
+<p>另外，2<sup>-23</sup> 也代表了浮点数类型能够精确表示的最小一位数，我想把这个值作为浮点数的精度也有这方面的考虑。</p>
+
+<h2 id="浮点数的比较">浮点数的比较</h2>
+
+<p>首先明确一点，所有浮点数的比较都是通过逐一对比比特的方式进行。</p>
+
+<p>因此，两个比特位完全一致，用<code class="language-plaintext highlighter-rouge">==</code>判断完全可行。
+如</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float a = 0.5;
+float b = 0.5;
+if (a == b)
+{
+	printf("isEqual");\\does executed
+}
+</code></pre></div></div>
+
+<p>然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用<code class="language-plaintext highlighter-rouge">==</code>,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float y = 1000000.3;
+float x = 0.3;
+float k = 1000000;
+float z = y-k-x;
+if (fabsf(z) &lt; FLT_EPSILON) {
+   NSLog(@"Z &lt; FLT_EPSILON");
+}
+z = y-x-k;
+if (fabsf(z) &lt; FLT_EPSILON) {
+    NSLog(@"Z &lt; FLT_EPSILON"); \\only this executed
+}
+</code></pre></div></div>
+
+<p>直觉上执行<code class="language-plaintext highlighter-rouge">y-k-x</code>也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。</p>
+
+<p><code class="language-plaintext highlighter-rouge">y-k-x &gt;= FLT_EPSILON</code>是因为<code class="language-plaintext highlighter-rouge">y-k</code>都是数字较大，指数位较高，在运算过程中实施阶数对其操作的时候舍掉了小数位后0.3的精度，因此，计算出的z值实际是0.01+多。</p>
+
+<p>因此，<strong>对于浮点数，比较大小永远是一个伪命题</strong>。</p>
+
+<p>对精度要求不高的地方用一用无妨，关键数据一定要用整数类型.</p>
+
+<h2 id="非规格化浮点数denormalized-float">非规格化浮点数（Denormalized float）</h2>
+
+<p>对于问题4,相信很多同学会认为+/-0 计算量较小，对运算速度影响小，然而实际测试结果却不是。导致低一段代码性能低的原因为，不断地 y*x/z产生了非规格化浮点数， 而在+/-0的情况下，之后的运算都是Denormalized float之间的运算</p>
+
+<p>而第二段代码+/- 0.1 实际上提升了运算阶数，使得运算的数值不是Denormalized float.</p>
+
+<p>github 上有个问答http://stackoverflow.com/questions/9314534/why-does-changing-0-1f-to-0-slow-down-performance-by-10x 有人测试过，使用第一段代码性能比第而段代码<strong>慢十倍</strong>。</p>
+
+<p>链接中大牛们的回答正是这个问题的答案，这都是由于CPU对非规格化浮点数的支持导致的。</p>
+
+<p>一般的浮点数，默认数字位从小数点后第一位开始，小数点前一位为1.</p>
+
+<p>而非规格化浮点数为了增加对更小的数字的支持，打破了小数点前一位为1的限制，即将浮点数的表示范围增加了23位（二进制下）。</p>
+
+<h2 id="结语">结语</h2>
+
+<p>关于浮点数的那些事到这结束啦，欢迎大家一起讨论~</p>
+
+:ET

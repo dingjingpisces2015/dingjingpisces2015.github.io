@@ -5,9 +5,1139 @@
     <description>iOS 开发分享</description>
     <link>http://localhost:4000/</link>
     <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Sun, 26 Nov 2017 22:55:02 +0800</pubDate>
-    <lastBuildDate>Sun, 26 Nov 2017 22:55:02 +0800</lastBuildDate>
-    <generator>Jekyll v3.6.2</generator>
+    <pubDate>Fri, 07 Jan 2022 20:22:33 +0800</pubDate>
+    <lastBuildDate>Fri, 07 Jan 2022 20:22:33 +0800</lastBuildDate>
+    <generator>Jekyll v4.2.1</generator>
+    
+      <item>
+        <title></title>
+        <description>&lt;h1 id=&quot;wwdc-sessions-指路&quot;&gt;WWDC sessions 指路&lt;/h1&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;异步
+    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;https://developer.apple.com/videos/play/wwdc2021/10132/&quot;&gt;Meet async/await in Swift&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;https://developer.apple.com/videos/play/wwdc2021/10254&quot;&gt;Swift concurrency: Behind the scenes&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;[Optional]&lt;a href=&quot;https://developer.apple.com/videos/play/wwdc2021/10058&quot;&gt;Meet AsyncSequence&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;[Optional]&lt;a href=&quot;https://developer.apple.com/videos/play/wwdc2021/10019&quot;&gt;Discover concurrency in SwiftUI&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Structured concurrency 结构化并发?
+    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;https://developer.apple.com/videos/play/wwdc2021/10134&quot;&gt;Explore structured concurrency in Swift&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;可变状态串行访问 actor
+    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;https://developer.apple.com/videos/play/wwdc2021/10133&quot;&gt;Protect mutable state with Swift actors&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;asyncawait-的一些基本使用&quot;&gt;async/await 的一些基本使用&lt;/h1&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Meet async/await in Swift&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;一些基本用法的例子&quot;&gt;一些基本用法的例子&lt;/h3&gt;
+
+&lt;p&gt;使用async前，如果去需要请求一个图片, 需要由开发者保证每个路径都正确的调用了completion&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;func fetchThumbnail(for id: String, completion: @escaping (UIImage?, Error?) -&amp;gt; Void) {
+    let request = thumbnailURLRequest(for: id)
+    let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        if let error = error {
+            completion(nil, error)
+        } else if (response as? HTTPURLResponse)?.statusCode != 200 {
+            completion(nil, FetchError.badID)
+        } else {
+            guard let image = UIImage(data: data!) else {
+                completion(nil, FetchError.badImage)
+                return
+            }
+            image.prepareThumbnail(of: CGSize(width: 40, height: 40)) { thumbnail in
+                guard let thumbnail = thumbnail else {
+                    completion(nil, FetchError.badImage)
+                    return
+                }
+                completion(thumbnail, nil)
+            }
+        }
+    }
+    task.resume()
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;使用async之后，代码简短了不少，并且编译器可以检查是否每个路径都正确的返回了&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;func fetchThumbnail(for id: String) async throws -&amp;gt; UIImage {
+    let request = thumbnailURLRequest(for: id) // async表示这个函数是可以被挂起的，每个调用到这个函数的函数都需要被标记为async
+    let (data, response) = try await URLSession.shared.data(for: request) // await挂起这个函数直到得到结果
+    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw FetchError.badID }
+    let maybeImage = UIImage(data: data)
+    // thumbnail property is async
+    guard let thumbnail = await maybeImage?.thumbnail else  { throw FetchError.badImage }
+    return thumbnail
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;函数和属性都可以是async的，但async用来修饰属性有两个限制：&lt;/p&gt;
+&lt;ol&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;async&lt;/code&gt; 可以从来修饰属性&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;get&lt;/code&gt;方法，也可以&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;throw&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;async throw&lt;/code&gt;&lt;/li&gt;
+  &lt;li&gt;只有read only的属性可以用&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;async&lt;/code&gt;修饰&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extension UIImage {
+    var thumbnail: UIImage? {
+        get async {
+            let size = CGSize(width: 40, height: 40)
+            return await self.byPreparingThumbnail(ofSize: size)
+        }
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;await可以用在for循环里&quot;&gt;await可以用在for循环里&lt;/h3&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;for await id in staticImageIDsURL.lines {
+    let thumbnail = await fetchThumbnail(for: id)
+    collage.add(thumbnail)
+}
+let result = await collage.draw()
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;asyncawait-facts&quot;&gt;Async/await facts&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;async&lt;/code&gt; enables function to suspend&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;await&lt;/code&gt; marks where an async function may suspend execution&lt;/li&gt;
+  &lt;li&gt;other work can happen during suspension&lt;/li&gt;
+  &lt;li&gt;once an awaited async call completes, execution resumes after the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;await&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;async-on-test&quot;&gt;async on test&lt;/h3&gt;
+&lt;p&gt;可以直接在test里写await等待结果完成做验证就好&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class MockViewModelSpec: XCTestCase {
+    func testFetchThumbnails() async throws {
+        XCTAssertNoThrow(try await self.mockViewModel.fetchThumbnail(for: mockID))
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;async-context&quot;&gt;async context&lt;/h3&gt;
+&lt;p&gt;在系统函数比如viewDidLoad里因为外面不能加async, 可以手动创建一个async的context&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Task {
+   self.image = try? await self.viewModel.fetchThumbnail(for: post.id)
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;continuation&quot;&gt;continuation&lt;/h3&gt;
+&lt;p&gt;Continuation这块其实不太理解，感觉像是为了一些不好转换的地方提供一个特殊的接口&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;withCheckedThrowingContinuation&lt;/code&gt;把现有的回调转换成了async/，await的方式，同时提供了是不是对每条路径都有调用&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;resume&lt;/code&gt;的检查.
+这里面&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;resume&lt;/code&gt;其实就是返回结果,&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;resume 每个路径必须被调用一次&lt;/li&gt;
+  &lt;li&gt;如果continuation没有调用resume，swift编译器会报warning&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;func getPersistentPosts(completion: @escaping ([Post], Error?) -&amp;gt; Void) {
+    do {
+        let req = Post.fetchRequest()
+        req.sortDescriptors = [NSSortDescriptor(key: &quot;date&quot;, ascending: true)]
+        let asyncRequest = NSAsynchronousFetchRequest&amp;lt;Post&amp;gt;(fetchRequest: req) { result in
+            completion(result.finalResult ?? [], nil)
+        }
+        try self.managedObjectContext.execute(asyncRequest)
+    } catch {
+        completion([], error)
+    }
+}
+
+// to-be
+func persistentPosts() async throws -&amp;gt; [Post] {
+    typealias PostContinuation = CheckedContinuation&amp;lt;[Post], Error&amp;gt;
+    return try await withCheckedThrowingContinuation { (continuation: PostContinuation) in
+        self.getPersistentPosts { posts, error in
+            if let error = error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume(returning: posts)
+            }
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;对于delegate的情况，continuation是可以被保存成属性，然后在delegate方法里分别resume的。&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class ViewController: UIViewController {
+    private var activeContinuation: CheckedContinuation&amp;lt;[Post], Error&amp;gt;?
+    func sharedPostsFromPeer() async throws -&amp;gt; [Post] {
+        try await withCheckedThrowingContinuation { continuation in
+            self.activeContinuation = continuation
+            self.peerManager.syncSharedPosts()
+        }
+    }
+}
+
+extension ViewController: PeerSyncDelegate {
+    func peerManager(_ manager: PeerManager, received posts: [Post]) {
+        self.activeContinuation?.resume(returning: posts)
+        self.activeContinuation = nil // guard against multiple calls to resume
+    }
+
+    func peerManager(_ manager: PeerManager, hadError error: Error) {
+        self.activeContinuation?.resume(throwing: error)
+        self.activeContinuation = nil // guard against multiple calls to resume
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;结构化并发&quot;&gt;结构化并发&lt;/h1&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Explore structed concurrency in Swift&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h3 id=&quot;task&quot;&gt;Task&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Task 提供了一个concurrently执行 async代码的异步环境, 系统会让task context环境内的async代码并发并且高效执行&lt;/li&gt;
+  &lt;li&gt;使用task, 编译器会检查task的用法来避免并发问题&lt;/li&gt;
+  &lt;li&gt;在task context里调用async函数的时候并不会创建另一个task&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;async-let-task&quot;&gt;Async let task&lt;/h3&gt;
+
+&lt;p&gt;表示不等待&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;async let&lt;/code&gt;修饰的变量绑定，就执行后面的语法
+只有&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;try await&lt;/code&gt;的时候才去等待当前变量绑定
+在&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;try await&lt;/code&gt;之前访问变量并不会导致计算变量（这个时候访问会得到啥？默认的绑定值？)
+&lt;img src=&quot;https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/raw/master/img/blog/2022.01.02/async_let.png&quot; alt=&quot;async let&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;一个例子&lt;/p&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// before using async let
+// 用let其实就已经得到了这个值，相当于第二个图片以来第一个图片下载玩才能执行
+func fetchOneThumbnail(withID id: String) async throws -&amp;gt; UIImage {
+    let imageReq = imageRequest(for: id), metadataReq = metadataRequest(for: id)
+   	let (data, _) = try await URLSession.shared.data(for: imageReq)
+    let (metadata, _) = try await URLSession.shared.data(for: metadataReq)
+    guard let size = parseSize(from: metadata),
+        let image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: size) else {
+        throw ThumbnailFailedError()
+    }
+    return image
+}
+
+// after using async let
+// try await 用来等待async let修饰的变量绑定
+func fetchOneThumbnail(withID id: String) async throws -&amp;gt; UIImage {
+    let imageReq = imageRequest(for: id), metadataReq = metadataRequest(for: id)
+    async let (data, _) = URLSession.shared.data(for: imageReq)
+    async let (metadata, _) = URLSession.shared.data(for: metadataReq)
+    guard let size = parseSize(from: try await metadata),
+        let image = try await UIImage(data: data)?.byPreparingThumbnail(ofSize: size) else {
+        throw ThumbnailFailedError()
+    }
+    return image
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;p&gt;当其中一个任务出错时，另一个任务会被cancel，比如当data请求出错了，metadata的请求会被cancel, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;fetchOneThumbnail&lt;/code&gt;函数会等所有的任务完成才抛出异常, 这么做是为了避免内存泄漏&lt;/p&gt;
+
+&lt;p&gt;async任务执行是有一个任务树的只有当依赖的任务都完成，上层的任务才会标记为完成,  mark一个task为cancel 并不会stop这task， task还是会继续执行，并且把所有依赖的task也被标记为cancel&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/raw/master/img/blog/2022.01.02/task_tree.png&quot; alt=&quot;async let&quot; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;cancellation-is-cooperative&quot;&gt;Cancellation is cooperative&lt;/h3&gt;
+
+&lt;p&gt;其实我并不太理解这段具体的含义，感觉是需要使用者来保证cancel是可以被传递给系统函数的？&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Tasks are not stopped immediately when cancelled&lt;/li&gt;
+  &lt;li&gt;Cancellation can be checked from anywher&lt;/li&gt;
+  &lt;li&gt;Design with cancellation in mind&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (Task.isCancelled) { return }
+try Task,checkCancellation()
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;group-tasks&quot;&gt;Group tasks&lt;/h3&gt;
+
+&lt;p&gt;group task是用来并行的执行一系列子任务,group task和async let task可以组合使用&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/raw/master/img/blog/2022.01.02/group.png&quot; alt=&quot;group&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;group task的错误处理
+如果是gruop的block里抛出错误，group里其他的任务都会cancel
+如果是group外部抛出异常，group里的其他任务不会被cancel,需要手动取消&lt;/p&gt;
+&lt;h3 id=&quot;data-race-问题&quot;&gt;Data race 问题&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Task 创建的闭包是一种特殊类型的闭包叫@Sendable(我理解想上图里的group.async{}就是这样的一个闭包)&lt;/li&gt;
+  &lt;li&gt;编译器会检查创建的@Sendable闭包内有没有捕获可变变量，如果有会报错&lt;/li&gt;
+  &lt;li&gt;闭包里只支持包含线程安全的变量，比如值类型，int, String，或者actors 以及内部有做同步的类&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;func fetchThumbnails(for ids: [String]) async throws -&amp;gt; [String: UIImage] {
+    var thumbnails: [String: UIImage] = [:]
+    // return key value in group
+    try await withThrowingTaskGroup(of: (String, UIImage).self) { group in
+        for id in ids {
+            group.async {
+                return (id, try await fetchOneThumbnail(withID: id))
+            }
+        }
+        // this part is sequentially, can safely add
+        for try await (id, thumbnail) in group {
+            thumbnails[id] = thumbnail
+        }
+    }
+    return thumbnails
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;unstructured-tasks&quot;&gt;Unstructured Tasks&lt;/h3&gt;
+
+&lt;p&gt;提供了一组api用来处理不能结构化编程的情况：&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;一些任务需要从non-async环境去开始（比如系统UI函数 viewDidAppear？)&lt;/li&gt;
+  &lt;li&gt;任务存在于不同的scope(比如delegate)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Task{
+// do something
+}
+// Task对象也可以被赋值，用于后面取消
+
+@MainActor
+class MyDelegate: UICollectionViewDelegate {
+    var thumbnailTasks: [IndexPath: Task.Handle&amp;lt;Void, Never&amp;gt;] = [:]
+    func collectionView(_ view: UICollectionView,
+                        willDisplay cell: UICollectionViewCell,
+                        forItemAt item: IndexPath) {
+        let ids = getThumbnailIDs(for: item)
+        thumbnailTasks[item] = async {
+            let thumbnails = await fetchThumbnails(for: ids)
+            display(thumbnails, in: cell)
+        }
+    }
+
+    func collectionView(_ view: UICollectionView,
+                        didEndDisplay cell: UICollectionViewCell,
+                        forItemAt item: IndexPath) {
+        thumbnailTasks[item]?.cancel()
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;ul&gt;
+  &lt;li&gt;Inherit actor isolation and priority of the origin context（原来是啥线程，task执行还是啥线程）&lt;/li&gt;
+  &lt;li&gt;Lifetime is not confined to any scope&lt;/li&gt;
+  &lt;li&gt;Can be launched anywhere, even non-async functions&lt;/li&gt;
+  &lt;li&gt;Must be manually cancelled or awaited&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;detached-tasks&quot;&gt;Detached tasks&lt;/h3&gt;
+&lt;ul&gt;
+  &lt;li&gt;Unscoped lifetime, manually cancelled and awaited 声明周期不受限制&lt;/li&gt;
+  &lt;li&gt;Do not inherit anything form their originating context 也不继承原来的的执行环境&lt;/li&gt;
+  &lt;li&gt;Optional parameters control priority and other traits 可以控制优先级和task在什么时候，在哪执行&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;Task.detched(priority: .background) { // 创建一个新的task
+	withTaskGroup(of: Void.self) { g in // 创建一组想要在后台执行的任务，当然不用这个也行，只是为了取消比较方便
+		g.async { writeToLocalCache(thumbnails) } // 子任务是继承父任务的优先级的
+        g.async { log(thumbnails) } 
+        g.async { ... }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;各种task特点总结&quot;&gt;各种task特点总结&lt;/h3&gt;
+&lt;p&gt;&lt;img src=&quot;https://github.com/dingjingpisces2015/dingjingpisces2015.github.io/raw/master/img/blog/2022.01.02/tasks.png&quot; alt=&quot;tasks&quot; /&gt;&lt;/p&gt;
+
+</description>
+        <pubDate>Fri, 07 Jan 2022 20:22:33 +0800</pubDate>
+        <link>http://localhost:4000/2022/01/07/2022-01-02-async_await/</link>
+        <guid isPermaLink="true">http://localhost:4000/2022/01/07/2022-01-02-async_await/</guid>
+        
+        
+      </item>
+    
+      <item>
+        <title></title>
+        <description>&lt;h1 id=&quot;开始搞flutter的第一天&quot;&gt;开始搞Flutter的第一天&lt;/h1&gt;
+
+&lt;p&gt;第一次入手Flutter,当然先从&lt;a href=&quot;https://flutter.dev/docs/get-started/install&quot;&gt;官网&lt;/a&gt;开始了。
+&lt;a href=&quot;https://flutterchina.club/flutter-for-ios/&quot;&gt;Flutter中文&lt;/a&gt; 对flutter网站的翻译，有些地方不能一一对应。&lt;/p&gt;
+
+&lt;p&gt;按部就班的安装，没什么好说的。&lt;/p&gt;
+
+&lt;h2 id=&quot;development-笔记&quot;&gt;Development 笔记&lt;/h2&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/widgets-intro&quot;&gt;Widget Intro &lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Flutter和React的相似之处是都有一个函数返回UI, Flutter是Widget build, React是render()&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;StatefulWidget和State是分离的两个类， StatefulWidget持有State, State类负责存储状态，和状态转换，以及状态转换成UI的build函数. 最后给了一个吧StatefulWidget拆分成两个StatelesWidget的例子，应该也是为了推荐无状态Widget的使用，实现组件复用。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Dart的初始化函数别具一格(附上&lt;a href=&quot;http://www.geekjc.com/ebook/detail/5bbdc2b33f74c812e3ac9a18/1546846473973&quot;&gt;Dart语法网站链接&lt;/a&gt;)&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class CounterDisplay extends StatelessWidget {
+  CounterDisplay({this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('Count: $count');
+  }
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;为了解决共享状态的问题，一般会向子wedget里传入一个包含state的函数，而state的改变是在这个函数里，state就可以存在parent里了&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;重新创建一个同样的Widget成本并不高，因为Flutter framework会做diff&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;State也提供了一些常见的声明周期（&lt;a href=&quot;https://api.flutter.dev/flutter/widgets/State-class.html&quot;&gt;Doc&lt;/a&gt;）&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;deactivate&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;didUpdateWidget&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;dispose&lt;/code&gt; etc&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;存在Key作为widget的identity的概念，分siblings和glboal key, 都要求在各自可见范围内唯一。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/layout&quot;&gt;Building layout- 使用&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Widget是用来创建UI的类&lt;/li&gt;
+  &lt;li&gt;Widget可以被用来生成Layout和UI&lt;/li&gt;
+  &lt;li&gt;组合简单的widget可以产生复杂的widget&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;debugPaintSizeEnabled&lt;/code&gt; 可以渲染页面结构 &lt;a href=&quot;https://flutter.dev/docs/development/tools/devtools/inspector#debugging-layout-issues-visually&quot;&gt;UI debug doc&lt;/a&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;想要给view增加padding, margin, border, background color， 命名组件？（不理解） 都需要使用Container widget包裹&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Scaffold widget是Material的一种，提供了默认的banner吗backgroundcolor还提供了其他的接口。&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Container: Adds padding, margins, borders, background color, or other decorations to a widget.&lt;/li&gt;
+  &lt;li&gt;GridView: Lays widgets out as a scrollable grid.&lt;/li&gt;
+  &lt;li&gt;ListView: Lays widgets out as a scrollable list.&lt;/li&gt;
+  &lt;li&gt;Stack: Overlaps a widget on top of another&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Stack 的逻辑和想的不一样，以为是类似listview的线性排列，其实是从下到上的覆盖逻辑， 第一个是baseview,后面的内容覆盖在baseview上&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;添加图片要先在&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pubspec.yaml&lt;/code&gt;里打开&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;assets&lt;/code&gt;配置, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pubspec.yaml&lt;/code&gt;里的配置是&lt;strong&gt;大小写敏感的&lt;/strong&gt;&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/layout/constraints&quot;&gt;Core rule: Constraints go down,  Size go up, Parent sets position. &lt;/a&gt; 值的一读&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;Widget可以在它parent允许的范围内决定自己的size&lt;/li&gt;
+  &lt;li&gt;Widget不知道也不能决定自己在screen的位置（position），位置是由parent决定的&lt;/li&gt;
+  &lt;li&gt;因为每个Widget的size和position都是由parent决定的，所以在遍历完整颗树前是不能知道某个Widget的精确大小和位置的。&lt;/li&gt;
+  &lt;li&gt;Widget是通过底层的RenderBox做渲染的&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://flutter.dev/docs/development/ui/interactive&quot;&gt;Adding interactivity to your Flutter app&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;一个有状态的widget需要实现两个类的子类：StatefulWidget， States&lt;/li&gt;
+  &lt;li&gt;State可以由当前组件，父组件，混合的方式实现，由父组件管理状态时，一般是把状态做为子组件的参数传进去&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Asset 和 图片添加 &lt;a href=&quot;https://flutter.dev/docs/development/ui/assets-and-images&quot;&gt;link&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;可以通过  AssetBundle  loadString() 来load string/text 资源， load() 来load image/binary&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;可以通过import ‘package:flutter/services.dart’ show rootBundle; 来获取全局的AssertBundle&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;…/2.0x/my_icon.png, 系统会根据屏幕分辨率，自动选取合适的图片&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;。当主资源缺少某个文件时，会按分辨率从低到高的顺序去选择，也就是说 1x 中没有的话会在 2x 中找，2x 中还没有的话就在 3x 中找&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;设备像素比 取决于 MediaQueryData.size 的大小，它需要在祖先节点提供 MaterialApp 或者 CupertinoApp 作为 AssetImage 的祖先节点。 &lt;strong&gt;这是啥东西完全不理解&lt;/strong&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Android, iOS, flutter的资源文件可以互相访问&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;应用图标和启动图只能在Android, iOS工程里替换&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;https://medium.com/flutter/learning-flutters-new-navigation-and-routing-system-7c9068155ade&quot;&gt;路由和导航&lt;/a&gt; &lt;a href=&quot;https://blog.csdn.net/u013491829/article/details/109330086&quot;&gt;中文版&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;Router 1.0的组件有&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Navigator&lt;/li&gt;
+  &lt;li&gt;Router&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;匿名router是通过builder直接生成页面&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;routers 给的path只能固定字符串跳转，算是命名的router&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;onGenerateRoute(setting) 可以处理所有的router, 自己解析参数, setting是RouteSettings的实例&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Router 2.0的组件有&lt;/p&gt;
+
+&lt;p&gt;2.0好难理解&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Page 要展示的页面，Navigator会有一个pages的参数，可以声明压栈顺序&lt;/li&gt;
+  &lt;li&gt;Router&lt;/li&gt;
+  &lt;li&gt;RouteInformationParser&lt;/li&gt;
+  &lt;li&gt;RouterDelegate&lt;/li&gt;
+  &lt;li&gt;BackButtonDispatcher&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://miro.medium.com/max/1400/1*hNt4Bc8FZBp_Gqh7iED3FA.png&quot; /&gt;&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;RouteInformationParser, RouterDelegate 用来动态处理导航跳转&lt;/li&gt;
+  &lt;li&gt;TransitionDelegate 可以自定义导航动画&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Animations [https://flutter.dev/docs/development/ui/animations]
+暂时跳过， 不太理解，也很难用到&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;选择使用哪种Animation的路线图&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://flutter.dev/assets/ui/animations/animation-decision-tree-cf57f0d6c1b6fd8e7ea512bd659c2f97a2f142f1137e89d1f67a5fbc1be9f2c3.png&quot; /&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Advanced UI [https://flutter.dev/docs/development/ui/advanced/slivers]&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;1.(Slivers)[https://flutter.dev/docs/development/ui/advanced/slivers]
+SliverAppBar 感觉是一种会随着滑动变高或者完全隐藏的NavigationBar&lt;/p&gt;
+
+&lt;p&gt;SliverList
+SliverGrid&lt;/p&gt;
+
+</description>
+        <pubDate>Fri, 07 Jan 2022 20:22:33 +0800</pubDate>
+        <link>http://localhost:4000/2022/01/07/2020-11-17-Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</link>
+        <guid isPermaLink="true">http://localhost:4000/2022/01/07/2020-11-17-Flutter%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/</guid>
+        
+        
+      </item>
+    
+      <item>
+        <title>Airbnb刷题整理</title>
+        <description>&lt;p&gt;刷题主要参考https://yezizp2012.github.io/2017/06/01/airbnb%E9%9D%A2%E8%AF%95%E9%A2%98%E6%B1%87%E6%80%BB/这篇文章&lt;/p&gt;
+
+&lt;h2 id=&quot;palindrome-pairs&quot;&gt;Palindrome Pairs&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class Solution
+{
+    func palindromePairs(_ input:[String]) -&amp;gt; [[Int]] {
+        var result = [[Int]]()
+        for i in 0..&amp;lt;(input.count-1) {
+            for j in i+1..&amp;lt;input.count  {
+                let strA = input[i] + input[j]
+                let strB = input[j] + input[i]
+                if isPalindrome(strA) {
+                    result.append([i,j])
+                }
+                if isPalindrome(strB) {
+                    result.append([j,i])
+                }
+            }
+        }
+        return result
+    }
+    func isPalindrome(_ input:String) -&amp;gt; Bool {
+        for index in 0..&amp;lt;(input.count / 2) {
+            let head = input.index(input.startIndex, offsetBy: index)
+            let tail = input.index(input.startIndex, offsetBy:(input.count - 1 - index))
+            if input[head] != input[tail] {
+                return false
+            }
+        }
+        return true
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;h2 id=&quot;round-numbers&quot;&gt;Round numbers&lt;/h2&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class Solution
+{
+    func multiply(_ num1: String, _ num2: String) -&amp;gt; String {
+        var isNagtive = false
+        var num11 = num1
+        var num22 = num2
+        var ret = &quot;0&quot;
+        if num1.hasPrefix(&quot;-&quot;) {
+            isNagtive = true
+            num11 = String(num1.suffix(num1.count - 1))
+            if num2.hasPrefix(&quot;-&quot;) {
+                isNagtive = false
+                num22 = String(num2.suffix(num2.count-1))
+            }
+        } else if num2.hasPrefix(&quot;-&quot;) {
+            isNagtive = true
+            num22 = String(num2.suffix(num2.count-1))
+        }
+        let base = &quot;0&quot;.unicodeScalars.first!.value
+        for i in num11 {
+            let rangeValue = i.unicodeScalars.first!.value - base
+            for _ in 0..&amp;lt;rangeValue {
+                ret = add(ret, num22)
+            }
+            ret.append(&quot;0&quot;)
+        }
+        print(ret)
+        ret.remove(at: ret.index(before: ret.endIndex))
+        if isNagtive == true {
+            ret.insert(&quot;-&quot;, at: ret.startIndex)
+        }
+        
+        return ret
+    }
+    
+    //    func numFromString(_ input:String) -&amp;gt;(String, String) {
+    //        let num1range = input.range(of :&quot;num1 = &quot;)
+    //        let num2
+    //    }
+    
+    func add(_ a:String, _ b:String) -&amp;gt; String {
+        let base = &quot;0&quot;.unicodeScalars.first?.value
+        let minCount = a.count &amp;lt; b.count ? a.count : b.count
+        var ret:String = &quot;&quot;
+        var carry:UInt32 = 0
+        for i in 0..&amp;lt;minCount
+        {
+            let va = a[a.index(a.startIndex, offsetBy:a.count-i-1)].unicodeScalars.first!.value - base!
+            let vb = b[b.index(b.startIndex, offsetBy: (b.count-i-1))].unicodeScalars.first!.value - base!
+            //            print(&quot;va = \(va) vb = \(vb) carry = \(carry)&quot;)
+            let (thisRound, thisCarry) = modAndCarry(va+vb+carry)
+            //            print(&quot;thisround = \(thisRound), thisCarry = \(thisCarry)&quot;)
+            ret.append(thisRound)
+            carry = thisCarry
+        }
+        var maxString:String
+        if a.count &amp;gt; b.count {
+            maxString = a
+        } else {
+            maxString = b
+        }
+        for i in minCount..&amp;lt;maxString.count {
+            let vc = maxString[maxString.index(maxString.startIndex, offsetBy: maxString.count - i - 1)].unicodeScalars.first!.value - base!
+            let (thisRound, thisCarry) = modAndCarry(vc+carry)
+            //            print(&quot;thisround = \(thisRound), thisCarry = \(thisCarry)&quot;)
+            ret.append(thisRound)
+            carry = thisCarry
+        }
+        if carry != 0 {
+            ret.append(String(carry))
+        }
+        return String(ret.reversed())
+    }
+    func modAndCarry(_ input:UInt32) -&amp;gt; (String, UInt32) {
+        let last = input % 10
+        let carry = (input - last) / 10
+        return (String(last), carry)
+    }
+    func string2num(_ input:String) -&amp;gt; Int64 {
+        var ret:Int64 =  0
+        for item in input.unicodeScalars {
+            ret = ret * 10 + Int64(item.value - 97)
+        }
+        return ret
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;menu-order&quot;&gt;menu order&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class Solution {
+    var solution:[[Int]] = [[Int]]()
+    func combinationSum2(_ candidates: [Int], _ target: Int) -&amp;gt; [[Int]] {
+         var sortedMenu = candidates
+        sortedMenu.sort()
+        search(sortedMenu, sortedMenu.count, target, 0, [Int](),0)
+        return solution
+    }
+    func search(_ menu:[Int],_ count:Int, _ target:Int, _ current:Int, _ list:[Int], _ currentIndex:Int) {
+        if current == target {
+            solution.append(list)
+            return
+        }
+        var currentList = list
+        for i in currentIndex..&amp;lt;count {
+            if i &amp;gt; currentIndex &amp;amp;&amp;amp; menu[i-1] == menu[i] {
+                continue
+            }
+            if current + menu[i] &amp;lt;= target {
+                currentList.append(menu[i])
+                search(menu, count, target, current+menu[i], currentList, i+1)
+                currentList.removeLast()
+            }
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;字符串拼写问题&quot;&gt;字符串拼写问题&lt;/h2&gt;
+&lt;p&gt;text justification&lt;/p&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class Solution {
+    func fullJustify(_ words: [String], _ maxWidth: Int) -&amp;gt; [String] {
+        var list = [String]()
+        var ret = [String]()
+        var count = 0
+        for word in words {
+            count += word.count
+            if count &amp;lt;= maxWidth {
+                list.append(word)
+                count += 1
+            } else {
+                ret.append(makeMiddleLine(list, maxWidth))
+                list.removeAll()
+                count = word.count + 1
+                list.append(word)
+            }
+        }
+        ret.append(makeLastLine(list, maxWidth))
+        return ret
+    }
+    
+    func makeMiddleLine(_ words: [String], _ maxWidth: Int) -&amp;gt; String {
+        var ret = &quot;&quot;
+        let wordCount = words.map({$0.count}).reduce(0, +)
+        var space = maxWidth - wordCount
+        if words.count == 1 {
+            ret.append(words.first!)
+            let spaceString = String.init(repeating:&quot; &quot;, count: space)
+            ret.append(spaceString)
+        } else {
+            let commonMargin = Int(space / (words.count-1))
+            var extraMarginCount = space % (words.count-1)
+            let commonSpace = String.init(repeating:&quot; &quot;, count: commonMargin)
+            let extraSpace = String.init(repeating:&quot; &quot;, count:commonMargin+1)
+            var count = 0
+            for word in words {
+                ret.append(word)
+                if count == words.count - 1 {
+                    continue
+                } 
+                if count &amp;lt; extraMarginCount {
+                    ret.append(extraSpace)
+                } else {
+                    ret.append(commonSpace)
+                }
+                count += 1
+            }
+        }
+        
+        return ret
+    }
+    func makeLastLine(_ words: [String], _ maxWidth: Int) -&amp;gt; String {
+        var ret = &quot;&quot;
+        for word in words {
+            ret.append(word)
+            if ret.count &amp;lt; maxWidth {
+                ret.append(&quot; &quot;)
+            }
+        }
+        
+        let lastString = String.init(repeating:&quot; &quot;, count:maxWidth-ret.count)
+        ret.append(lastString)
+        return ret
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;pour-water&quot;&gt;pour water&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class Solution {
+    func run(_ heights:[Int], _ Value:Int, _ K:Int) -&amp;gt; [Int] {
+        var ret = [Int](repeating: 0, count: heights.count)
+        var temp = heights
+        var sortedIndex = sortByValue(heights)
+        for v in 0..&amp;lt;Value {
+            if temp[K] == sortedIndex[0].0 {
+                temp[K] += 1
+                ret[K] += 1
+            } else {
+                let index = sortedIndex[0].1
+                temp[index] += 1
+                ret[index] += 1
+            }
+            sortedIndex = sortByValue(temp)
+        }
+        descirptionWalle(heights, ret)
+        
+        return ret
+    }
+    func sortByValue(_ heights:[Int]) -&amp;gt; [(Int, Int)] {
+        var ret = [(Int, Int)]()
+        var index = 0
+        for value in heights {
+            ret.append((value, index))
+            index += 1
+        }
+        ret.sort { (a, b) -&amp;gt; Bool in
+            return a.0 &amp;lt; b.0
+        }
+        return ret
+        
+    }
+    func descirptionWalle(_ heights:[Int], _ waters:[Int]) {
+        let height = heights.enumerated().map { (index, element) -&amp;gt; Int in
+            return element+waters[index]
+        }.max()!
+        for h in (0..&amp;lt;height).reversed() {
+            var count = 0
+            for i in heights {
+                if i + waters[count] &amp;gt;= h + 1 &amp;amp;&amp;amp; i &amp;lt;= h{
+                    print(&quot;W&quot;, terminator:&quot;&quot;)
+                } else if i &amp;gt;= h + 1 {
+                    print(&quot;#&quot;, terminator:&quot;&quot;)
+                } else {
+                    print(&quot; &quot;, terminator:&quot;&quot;)
+                }
+                count += 1
+            }
+            print(&quot;&quot;)
+        }
+    }
+}
+
+let s = Solution.init().run([2,1,1,2,1,2,2], 4, 3)
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;puzzle&quot;&gt;puzzle&lt;/h2&gt;
+
+&lt;p&gt;class Solution
+{
+    var founded = false
+    var finalPuzzle = &lt;a href=&quot;&quot;&gt;[Int]&lt;/a&gt;
+    var markedMap = &lt;a href=&quot;&quot;&gt;Int:Int&lt;/a&gt;
+    var queue = &lt;a href=&quot;&quot;&gt;[[Int]]&lt;/a&gt;
+    var minResult = -1
+    func run(_ puzzle:[[Int]]) -&amp;gt; Int {
+        forceSearch(puzzle)
+        return minResult
+    }&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;func forceSearch(_ puzzle:[[Int]]) {
+    if isFound(puzzle) {
+        minResult = 0
+        return
+    }
+    queue.append(puzzle)
+    markedMap[sequenceArray(puzzle)!] = 0
+    while queue.count &amp;gt; 0 {
+        let temp = queue[0]
+        queue.remove(at: 0)
+        for round in 0..&amp;lt;4 {
+            let (movedPuzzle, success) = move(temp, round)
+            if markedMap[sequenceArray(movedPuzzle)!] != nil {
+                continue
+            }
+            if (success) {
+                if isFound(movedPuzzle) {
+                    minResult = markedMap[sequenceArray(temp)!]! + 1;
+                    return
+                }
+                queue.append(movedPuzzle)
+                markedMap[sequenceArray(movedPuzzle)!] = markedMap[sequenceArray(temp)!]! + 1;
+            }
+        }
+    }
+}
+
+func move(_ puzzle:[[Int]], _ direction:Int) -&amp;gt; ([[Int]],Bool) {
+    //left:0, right:1, top:2, bottom:3
+    let zeroIndex = foundZero(puzzle)
+    let zeroX = zeroIndex[0]
+    let zeroY = zeroIndex[1]
+    var targetX = 0
+    var targetY = 0
+    var puzzleCopy = puzzle
+    if direction == 0 {
+        if zeroY == 0 {
+            return (puzzle, false)
+        }
+        targetX = zeroX
+        targetY = zeroY - 1
+        
+    } else if direction == 1 {
+        if zeroY == puzzle.first!.count - 1 {
+            return (puzzle, false)
+        }
+        targetX = zeroX
+        targetY = zeroY + 1
+        
+    } else if direction == 2 {
+        if zeroX == 0 {
+            return (puzzle, false)
+        }
+        targetX = zeroX - 1
+        targetY = zeroY
+        
+    } else {
+        if zeroX == puzzle.count - 1 {
+            return (puzzle, false)
+        }
+        targetX = zeroX + 1
+        targetY = zeroY
+    }
+    puzzleCopy[zeroX][zeroY] = puzzleCopy[targetX][targetY]
+    puzzleCopy[targetX][targetY] = 0
+    return (puzzleCopy, true)
+    
+}
+func foundZero(_ puzzle:[[Int]]) -&amp;gt; [Int] {
+    var ret = [Int]()
+    var i = 0
+    var j = 0
+    var recordI = 0
+    var recordJ = 0
+    for row in puzzle {
+        j = 0
+        for item in row {
+            if item == 0
+            {
+                recordI = i
+                recordJ = j
+            }
+            j += 1
+        }
+        i += 1
+    }
+    ret.append(recordI)
+    ret.append(recordJ)
+    return ret
+}
+
+func sequenceArray(_ puzzle:[[Int]]) -&amp;gt; Int? {
+    var retStr = &quot;&quot;
+    for row in puzzle {
+        for item in row {
+            retStr.append(String(item))
+        }
+    }
+    return Int(retStr)
+}
+func isFound(_ puzzle:[[Int]]) -&amp;gt; Bool {
+    if finalPuzzle.count == 0
+    {
+        var index = 1
+        var rowNum = 1
+        for row in puzzle {
+            if rowNum == puzzle.count {
+                var tempArray = Array(index...index+row.count-2)
+                tempArray.append(0)
+                finalPuzzle.append(tempArray)
+            } else {
+                finalPuzzle.append(Array(index...index+row.count-1))
+            }
+            
+            index += row.count
+            rowNum += 1
+        }
+    }
+    return puzzle.elementsEqual(finalPuzzle)
+}
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;}&lt;/p&gt;
+
+&lt;p&gt;let s = Solution.init()
+print(s.run([[4,0,3],[2,1,5]]))&lt;/p&gt;
+
+&lt;p&gt;```&lt;/p&gt;
+</description>
+        <pubDate>Tue, 14 May 2019 02:58:00 +0800</pubDate>
+        <link>http://localhost:4000/2019/05/14/Airbnb%E5%88%B7%E9%A2%98%E6%80%BB%E7%BB%93/</link>
+        <guid isPermaLink="true">http://localhost:4000/2019/05/14/Airbnb%E5%88%B7%E9%A2%98%E6%80%BB%E7%BB%93/</guid>
+        
+        <category>刷题</category>
+        
+        <category>面试</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Autorelease的实现原理</title>
+        <description>&lt;h1 id=&quot;autorelease的实现原理&quot;&gt;Autorelease的实现原理&lt;/h1&gt;
+
+&lt;p&gt;Autorelease是苹果为开发者提供的用于垃圾回收的API，实现了在每个Runloop结束后自动释放无人引用的内存的功能。默认生成的代码会把我们要执行的代码包裹在AutoreleasePool里，在编译器的配合下，很多时候甚至感觉不到垃圾回收的存在。这篇文章希望通过源码分析Autorelease的实现原理。&lt;/p&gt;
+
+&lt;h2 id=&quot;使用场景&quot;&gt;使用场景&lt;/h2&gt;
+
+&lt;p&gt;我理解，Autorelease的使用时机有两种：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;开发者手动将变量加入AutoreleasePool；&lt;/li&gt;
+  &lt;li&gt;函数返回时，如果有返回对象，编译器自动添加到AutoreleasePool;&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&quot;关于返回值的优化&quot;&gt;关于返回值的优化&lt;/h2&gt;
+
+&lt;p&gt;对于第2中情况，苹果做了优化，对象的引用计数不直接添加在AutoreleasePage里，而是经过TLS中转，直接传递给调用方，这么做还可以避免两侧多余的Retain,Release操作。具体逻辑如下.&lt;/p&gt;
+
+&lt;p&gt;被优化后的的被调用方(callee)会查看紧跟在return后的调用方(caller)指令。如果caller的指令也是经过优化的，那么callee会跳过所有引用计数操作（no autorelease,no retain release）。而是在TLS中设置标志位，经过优化的caller会查看TLS，如果发现设置了TLS值，则不对返回对象进行retain/release等操作，而是根据TLS中的值设置retainCount.&lt;/p&gt;
+
+&lt;p&gt;在runtime源码中，被优化的两个callee是：
+objc_autoreleaseReturnValue  flag设置+1
+objc_retainAutoreleaseReturnValue  flag设置+0&lt;/p&gt;
+
+&lt;p&gt;被优化的两个caller是：
+objc_retainAutoreleasedReturnValue 调用者希望TLS值是+1
+objc_unsafeClaimAutoreleasedRetainValue 调用者希望TLS值是+0&lt;/p&gt;
+
+&lt;p&gt;如:
+Callee:
+     return objc_autoreleaseReturnValue(ret)；// flag=1
+Caller:
+     ret = callee();
+     ret = objc_retainAutoreleasedReturnValue(ret); //直接得到ret&lt;/p&gt;
+
+&lt;p&gt;Callee发现了优化的caller,设置TLS为+1
+Caller查看TLS，清空，此时在没有retain, autorelease的情况下，callee,caller合作使ret得引用计数依然正确。&lt;/p&gt;
+
+&lt;p&gt;根据系统的不同，callee会识别一些特殊的机器码。&lt;/p&gt;
+
+&lt;h2 id=&quot;autoreleasepage&quot;&gt;AutoreleasePage&lt;/h2&gt;
+
+&lt;p&gt;Autorelease的实现数据结构是AutoreleasePage.AutoreleasePage中的地址，以数组形式组织，而AutoreleasePage本身以链表形式组织。
+最新的Page称为hotPage,存储在TLS中，当新增一个obj到自动释放池时，如果hotPage已满或者不存在，会新生成一个Page，添加到原有链表中，并将该Page设置为hotPage&lt;/p&gt;
+
+&lt;p&gt;如下图所示：
+&lt;img src=&quot;https://raw.githubusercontent.com/dingjingpisces2015/dingjingpisces2015.github.io/master/img/autoreleasePage.png&quot; alt=&quot;AutoreleasePage&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;数据操作-pushpop&quot;&gt;数据操作 (Push/Pop)&lt;/h2&gt;
+
+&lt;h3 id=&quot;push&quot;&gt;Push&lt;/h3&gt;
+&lt;p&gt;向自动释放池中添加一个对象，代码如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static inline void *push()
+    {
+        id *dest;
+        if (DebugPoolAllocation) {
+            // Each autorelease pool starts on a new pool page.
+            dest = autoreleaseNewPage(POOL_BOUNDARY);
+        } else {
+            dest = autoreleaseFast(POOL_BOUNDARY);
+        }
+        assert(dest == EMPTY_POOL_PLACEHOLDER || *dest == POOL_BOUNDARY);
+        return dest;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;DebugPoolAllocation在不存在AutoreleasePage且可调试的情况下触发，一般而言会走到else的逻辑，即autoreleaseFast,这个函数如下&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static inline id *autoreleaseFast(id obj)
+    {
+        AutoreleasePoolPage *page = hotPage();
+        if (page &amp;amp;&amp;amp; !page-&amp;gt;full()) {
+            return page-&amp;gt;add(obj);
+        } else if (page) {
+            return autoreleaseFullPage(obj, page);
+        } else {
+            return autoreleaseNoPage(obj);
+        }
+    }
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;可以看到，这个函数&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;首先从TLS中取出了当前正在使用的hotPage,并且在页面不满的情况下，向page中添加这个对象，即向next数组中添加了obj&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   id *add(id obj)
+    {
+        id *ret = next;  // faster than `return next-1` because of aliasing
+        *next++ = obj;
+        return ret;
+    }
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;当hotPage存在时，调用autoreleaseFullPage方法，生成一个新的page设置为hotPage,并将obj add到这个新hotPage中&lt;/li&gt;
+  &lt;li&gt;其他情况下，调用autoreleaseNoPage方法，判断一些极端情况，在逻辑无误的情况下还是生成新page并添加对象&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;pop&quot;&gt;Pop&lt;/h3&gt;
+&lt;p&gt;Pop的实现与Push类似，都是对Page及next指针的操作。比较特别的是pop可以带一个token进去，实现释放对象，直至这个token位置的功能，
+其做法是首先倒叙释放hotPage的next指针对象，如果Page中的next数组中对象全部释放，且没到token位置，那么继续释放Page直到该位置。&lt;/p&gt;
+
+&lt;h2 id=&quot;总结&quot;&gt;总结&lt;/h2&gt;
+&lt;p&gt;AutoreleasePage的数据组织结构十分清晰，比较特别的是看到了AutoreleasePage释放后指针是0xA3A3A3A3，以及结合以前代码，看到了大量的对TLS的使用。&lt;/p&gt;
+</description>
+        <pubDate>Mon, 27 Nov 2017 06:52:00 +0800</pubDate>
+        <link>http://localhost:4000/2017/11/27/Autorelease%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/11/27/Autorelease%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</guid>
+        
+        <category>技术</category>
+        
+        <category>iOS开发</category>
+        
+        <category>runtime</category>
+        
+        <category>源码</category>
+        
+        
+      </item>
     
       <item>
         <title>Runtime中的数据结构</title>
@@ -24,7 +1154,7 @@ SrtipedMap是一种根据传入指针将对象映射到数组不同位置的Hash
 
 &lt;p&gt;以下是StripedMap源码，留下了关键部分。&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// StripedMap&amp;lt;T&amp;gt; is a map of void* -&amp;gt; T, sized appropriately
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// StripedMap&amp;lt;T&amp;gt; is a map of void* -&amp;gt; T, sized appropriately
 // for cache-friendly lock striping.
 // For example, this may be used as StripedMap&amp;lt;spinlock_t&amp;gt;
 // or as StripedMap&amp;lt;SomeStruct&amp;gt; where SomeStruct stores a spin lock.
@@ -70,7 +1200,7 @@ class StripedMap {
 
 &lt;p&gt;下面用于记录对象retainCount的RefcountMap就是一个DenseMap.&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct SideTable {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct SideTable {
     spinlock_t slock;
     RefcountMap refcnts;
     weak_table_t weak_table;
@@ -81,7 +1211,7 @@ class StripedMap {
 
 &lt;p&gt;DenseMap的成员变量有&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  BucketT *Buckets;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  BucketT *Buckets;
   unsigned NumEntries;
   unsigned NumTombstones;
   unsigned NumBuckets;
@@ -116,7 +1246,7 @@ class StripedMap {
 
 &lt;p&gt;以下为源码&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;template&amp;lt;typename LookupKeyT&amp;gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;template&amp;lt;typename LookupKeyT&amp;gt;
   bool LookupBucketFor(const LookupKeyT &amp;amp;Val,
                        const BucketT *&amp;amp;FoundBucket) const {
     const BucketT *BucketsPtr = getBuckets();
@@ -216,13 +1346,13 @@ class StripedMap {
 
 &lt;ul&gt;
   &lt;li&gt;如果是TaggedPointer不做任何处理
-    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (isTaggedPointer()) return (id)this;
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (isTaggedPointer()) return (id)this;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
   &lt;/li&gt;
   &lt;li&gt;判断是否是指针，如果是指针，直接放入SideTable进行引用计数&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (slowpath(!newisa.nonpointer)) { //如果newisa.nopointer = falae,即isa是个指针
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (slowpath(!newisa.nonpointer)) { //如果newisa.nopointer = falae,即isa是个指针
             ClearExclusive(&amp;amp;isa.bits);//这个函数啥都不做，是空的
             if (!tryRetain &amp;amp;&amp;amp; sideTableLocked) sidetable_unlock();//以self为参数，解锁这组sideTable
             if (tryRetain) return sidetable_tryRetain() ? (id)this : nil;
@@ -236,21 +1366,21 @@ class StripedMap {
   &lt;li&gt;
     &lt;p&gt;非指针情况，在isa的extra_RC位进行引用计数加一&lt;/p&gt;
 
-    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;newisa.bits = addc(newisa.bits, RC_ONE, 0, &amp;amp;carry);  // extra_rc++ 在extra_rc位上+1
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;newisa.bits = addc(newisa.bits, RC_ONE, 0, &amp;amp;carry);  // extra_rc++ 在extra_rc位上+1
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
 
     &lt;ul&gt;
       &lt;li&gt;如果没有溢出，保存新的isa&lt;/li&gt;
     &lt;/ul&gt;
 
-    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;slowpath(!StoreExclusive(&amp;amp;isa.bits, oldisa.bits, newisa.bits))
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;slowpath(!StoreExclusive(&amp;amp;isa.bits, oldisa.bits, newisa.bits))
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
 
     &lt;ul&gt;
       &lt;li&gt;如果溢出了，将extra_rc的一半值存入sideTable，has_sidetable_rc置1&lt;/li&gt;
     &lt;/ul&gt;
 
-    &lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (slowpath(carry)) { //如果溢出了
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;if (slowpath(carry)) { //如果溢出了
           // newisa.extra_rc++ overflowed
           if (!handleOverflow) { //retain方法调用中传入true
               ClearExclusive(&amp;amp;isa.bits);
@@ -331,24 +1461,24 @@ if (slowpath(transcribeToSideTable)) {
 
 &lt;p&gt;拥有两个属性，一个方法的Test类&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;@interface&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Test&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;NSObject&lt;/span&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;@interface Test : NSObject
 
-&lt;span class=&quot;k&quot;&gt;@property&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;NSString&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;str&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
-&lt;span class=&quot;k&quot;&gt;@property&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;NSObject&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;obj&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
-&lt;span class=&quot;k&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;doSomething&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+@property NSString *str;
+@property NSObject *obj;
+- (void)doSomething;
 
-&lt;span class=&quot;k&quot;&gt;@end&lt;/span&gt;
+@end
 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;经过转换，首先可以看到定义了&lt;/p&gt;
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;typedef struct objc_object Test;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;typedef struct objc_object Test;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-&lt;p&gt;即Test的结构和objc_object相同，而objc_object本身只有一个&lt;code class=&quot;highlighter-rouge&quot;&gt;isa&lt;/code&gt;指针&lt;/p&gt;
+&lt;p&gt;即Test的结构和objc_object相同，而objc_object本身只有一个&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;isa&lt;/code&gt;指针&lt;/p&gt;
 
-&lt;p&gt;接着定义实例变量结构体,如下，可以看到继承自NSObject的成员变量排列在最前方（&lt;code class=&quot;highlighter-rouge&quot;&gt;NSObject_IVARS&lt;/code&gt;），&lt;code class=&quot;highlighter-rouge&quot;&gt;Test&lt;/code&gt;类中的成员变量按声明顺序排列&lt;/p&gt;
+&lt;p&gt;接着定义实例变量结构体,如下，可以看到继承自NSObject的成员变量排列在最前方（&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;NSObject_IVARS&lt;/code&gt;），&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Test&lt;/code&gt;类中的成员变量按声明顺序排列&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct Test_IMPL {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct Test_IMPL {
      struct NSObject_IMPL NSObject_IVARS; 
      NSString *_str;
      NSObject *_obj;
@@ -357,7 +1487,7 @@ if (slowpath(transcribeToSideTable)) {
 
 &lt;p&gt;之后将所有方法声明成静态变量，其实可以看做类似于C++对象的成员函数，&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static void _I_Test_doSomething(Test * self, SEL _cmd) {}
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static void _I_Test_doSomething(Test * self, SEL _cmd) {}
 
 static NSString * _I_Test_str(Test * self, SEL _cmd) { return (*(NSString **)((char *)self + OBJC_IVAR_$_Test$_str)); }
 static void _I_Test_setStr_(Test * self, SEL _cmd, NSString *str) { (*(NSString **)((char *)self + OBJC_IVAR_$_Test$_str)) = str; }
@@ -368,12 +1498,12 @@ static void _I_Test_setObj_(Test * self, SEL _cmd, NSObject *obj) { (*(NSObject 
 
 &lt;p&gt;接着定义了实例变量列表结构，其中OBJC_IVAR_$_Test$_str 是实例变量_str所在偏移&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extern &quot;C&quot; unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section (&quot;__DATA,__objc_ivar&quot;))) = __OFFSETOFIVAR__(struct Test, _str);
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extern &quot;C&quot; unsigned long int OBJC_IVAR_$_Test$_str __attribute__ ((used, section (&quot;__DATA,__objc_ivar&quot;))) = __OFFSETOFIVAR__(struct Test, _str);
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;以下_OBJC_$_INSTANCE_VARIABLES_Test的内存布局和_ivar_list_t结构完全一致，记录了Test类中实例变量偏移位置。&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct /*_ivar_list_t*/ 
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct /*_ivar_list_t*/ 
      unsigned int entsize;  // sizeof(struct _prop_t)
      unsigned int count;
      struct _ivar_t ivar_list[2];
@@ -389,7 +1519,7 @@ static void _I_Test_setObj_(Test * self, SEL _cmd, NSObject *obj) { (*(NSObject 
 
 &lt;p&gt;接下来看，可以发现编译后的代码还生成了方法结构体，和属性列表&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//定义方法结构体
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//定义方法结构体
 static struct /*_method_list_t*/ {
      unsigned int entsize;  // sizeof(struct _objc_method)
      unsigned int method_count;
@@ -405,7 +1535,7 @@ static struct /*_method_list_t*/ {
 };
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//定义属性列表
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//定义属性列表
 static struct /*_prop_list_t*/ {
      unsigned int entsize;  // sizeof(struct _prop_t)
      unsigned int count_of_properties;
@@ -420,7 +1550,7 @@ static struct /*_prop_list_t*/ {
 
 &lt;p&gt;接下来cpp中定义类一个将方法列表，变量列表，属性列表整合起来的一个类,&lt;em&gt;OBJC_CLASS_RO&lt;/em&gt;$_Test 但这个类的布局看起来和objc_class并不一致&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct _class_ro_t _OBJC_CLASS_RO_$_Test __attribute__ ((used, section (&quot;__DATA,__objc_const&quot;))) = {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct _class_ro_t _OBJC_CLASS_RO_$_Test __attribute__ ((used, section (&quot;__DATA,__objc_const&quot;))) = {
      0, __OFFSETOFIVAR__(struct Test, _str), sizeof(struct Test_IMPL),
      (unsigned int)0,
      0,
@@ -436,7 +1566,7 @@ static struct /*_prop_list_t*/ {
 &lt;p&gt;之后便出现了真正的类定义，将上述_OBJC_CLASS_RO_$&lt;em&gt;Test赋值给OBJC_CLASS&lt;/em&gt;$&lt;em&gt;Test，元类同理,当一个类定义文件没被引入工程时，常常能看到诸如
 “_OBJC_CLASS&lt;/em&gt;$&lt;em&gt;XXClass, referenced from:xxx “这类的错误提示，正是因为该类在符号表中的名字实际是_OBJC_CLASS&lt;/em&gt;$_XXClass（下面的代码中可以看到通过dllexport在链接时导出了），而不是我们在.m文件中定义的名字。&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extern &quot;C&quot; __declspec(dllexport) struct _class_t OBJC_CLASS_$_Test __attribute__ ((used, section (&quot;__DATA,__objc_data&quot;))) = {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;extern &quot;C&quot; __declspec(dllexport) struct _class_t OBJC_CLASS_$_Test __attribute__ ((used, section (&quot;__DATA,__objc_data&quot;))) = {
      0, // &amp;amp;OBJC_METACLASS_$_Test,
      0, // &amp;amp;OBJC_CLASS_$_NSObject,
      0, // (void *)&amp;amp;_objc_empty_cache,
@@ -448,7 +1578,7 @@ static struct /*_prop_list_t*/ {
 &lt;p&gt;再仔细观察，OBJC_CLASS_$_Test是struct _class_t结构，而struct _class_t结构如下,
 和objc_class对比可以发现，&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct _class_t {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct _class_t {
 	struct _class_t *isa;
 	struct _class_t *superclass;
 	void *cache;
@@ -479,7 +1609,7 @@ struct objc_class : objc_object {
   &lt;li&gt;cache和vtable分别是两个指针大小，而cache_t结构为&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct cache_t {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct cache_t {
     struct bucket_t *_buckets;
     mask_t _mask;
     mask_t _occupied;
@@ -495,23 +1625,23 @@ struct objc_class : objc_object {
 
 &lt;p&gt;对应Test类，ro指针正是集合了类中所有成员变量和方法的_OBJC_CLASS_RO_$&lt;em&gt;Test结构。绑定了方法，成员变量的_OBJC_CLASS_RO&lt;/em&gt;$_Test结构在&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class_rw_t *data() { 
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;class_rw_t *data() { 
         return bits.data();
     } 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;方法中返回，而bits.data()方法的返回值为bits&amp;amp;FAST_DATA_MASK （这个FAST_DATA_MASK&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;#define FAST_DATA_MASK          0x00007ffffffffff8UL
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;#define FAST_DATA_MASK          0x00007ffffffffff8UL
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;从字面上看是取了数据所在段, 最后以8进行与可以看做使最后三bit为0，与&lt;/p&gt;
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; taggedPoint
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; taggedPoint
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;区分，前面为何是0还是不能理解）&lt;/p&gt;
 
 &lt;p&gt;Anyway,bits通过data方法返回了一个指向class_rw_t的指针，如下&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct class_rw_t {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;struct class_rw_t {
     // Be warned that Symbolication knows the layout of this structure.
     uint32_t flags;
     uint32_t version;
@@ -536,7 +1666,7 @@ struct objc_class : objc_object {
 
 &lt;p&gt;通过仔细阅读runtime源码，发现了__read_images方法，为了更清晰的表述，下面提取出了__read_images中读取类结构数据的部分代码&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int unoptimizedTotalClasses)
 {
 
 //...
@@ -570,11 +1700,11 @@ struct objc_class : objc_object {
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;读入类数据的代码为&lt;/p&gt;
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;_getObjc2ClassList 
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;_getObjc2ClassList 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;,跳到定义可以看到&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;GETSECT(_getObjc2ClassList,           classref_t,      &quot;__objc_classlist&quot;);
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;GETSECT(_getObjc2ClassList,           classref_t,      &quot;__objc_classlist&quot;);
 //等价于
 type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) { 
  return getDataSection&amp;lt;classref_t&amp;gt;(mhdr, __objc_classlist, nil, outCount); 
@@ -582,10 +1712,10 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;p&gt;可以看到&lt;code class=&quot;highlighter-rouge&quot;&gt;_getObjc2ClassList&lt;/code&gt;读了数据段中的__objc_classlist,
+&lt;p&gt;可以看到&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;_getObjc2ClassList&lt;/code&gt;读了数据段中的__objc_classlist,
 在rewrite后的cpp中搜索__objc_classlist可以看到&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section (&quot;__DATA, __objc_classlist,regular,no_dead_strip&quot;)))= {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static struct _class_t *L_OBJC_LABEL_CLASS_$ [2] __attribute__((used, section (&quot;__DATA, __objc_classlist,regular,no_dead_strip&quot;)))= {
 	&amp;amp;OBJC_CLASS_$_Test,
 };
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
@@ -621,7 +1751,7 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
 &lt;h2 id=&quot;synchronized与runtime&quot;&gt;@synchronized与runtime&lt;/h2&gt;
 &lt;p&gt;先通过clang的-rewrite-objc将带有synchronized的的OC代码转换成C,OC代码如下&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int main(int argc, const char * argv[]) {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int main(int argc, const char * argv[]) {
     @autoreleasepool {
         NSObject *obj = [NSObject new];
         @synchronized(obj) {
@@ -633,7 +1763,7 @@ type *_getObjc2ClassList(const headerType *mhdr, size_t *outCount) {
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 &lt;p&gt;转换成C代码如下：&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int main(int argc, const char * argv[]) {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int main(int argc, const char * argv[]) {
     /* @autoreleasepool */ { __AtAutoreleasePool __autoreleasepool;
         NSObject *obj = ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass(&quot;NSObject&quot;), sel_registerName(&quot;new&quot;));// NSObject *obj = [NSObject new];
         {
@@ -666,7 +1796,7 @@ try {
 
 &lt;p&gt;抛开大小写和奇怪的调用，@synchronized(obj)的过程可以看成是：&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;1、objc_sync_enter(obj)
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;1、objc_sync_enter(obj)
 2、执行block代码
 3、objc_sync_exit(obj)
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
@@ -679,7 +1809,7 @@ try {
 
 &lt;p&gt;objc_sync_enter&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int objc_sync_enter(id obj)
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;int objc_sync_enter(id obj)
 {
     int result = OBJC_SYNC_SUCCESS;
 
@@ -701,7 +1831,7 @@ try {
 
 &lt;p&gt;objc_sync_exit&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;
 // End synchronizing on 'obj'.
 // Returns OBJC_SYNC_SUCCESS or OBJC_SYNC_NOT_OWNING_THREAD_ERROR
 int objc_sync_exit(id obj)
@@ -728,7 +1858,7 @@ int objc_sync_exit(id obj)
 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;typedef struct SyncData {
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;typedef struct SyncData {
     struct SyncData* nextData;
     DisguisedPtr&amp;lt;objc_object&amp;gt; object;
     int32_t threadCount;  // number of THREADS using this block
@@ -742,7 +1872,7 @@ int objc_sync_exit(id obj)
 
 &lt;p&gt;代码如下&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static SyncData* id2data(id object, enum usage why)
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;static SyncData* id2data(id object, enum usage why)
 {
     spinlock_t *lockp = &amp;amp;LOCK_FOR_OBJ(object);// LOCK_FOR_OBJ = sDataLists[obj].lock，从全局变量sDataLists中取出锁
 
@@ -950,25 +2080,25 @@ int objc_sync_exit(id obj)
 
 &lt;p&gt;在开发过程中我们常常会写出下面的代码：&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;NSArray *array = @[1,2,3];
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;NSArray *array = @[1,2,3];
 NSNubmer *one = array[1]; // 1
 
 NSDictioanry *friend = @{@&quot;li&quot;:@&quot;han&quot;, @&quot;zhang&quot;:@&quot;xiao&quot;};
 NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-&lt;p&gt;对NSArray, NSDictionary的对象使用了&lt;code class=&quot;highlighter-rouge&quot;&gt;[]&lt;/code&gt;直接存取，这种存取方式就叫做&lt;strong&gt;Object Subscriping&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;对NSArray, NSDictionary的对象使用了&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;[]&lt;/code&gt;直接存取，这种存取方式就叫做&lt;strong&gt;Object Subscriping&lt;/strong&gt;.&lt;/p&gt;
 
 &lt;p&gt;Clang6支持两类subscripting访问， array-style(整数访问) ,dictionary-style（对象访问），当使用下标访问时，会调用对应的方法，一个类可以同时支持整数/对象下标访问。&lt;/p&gt;
 
 &lt;p&gt;整数下标访问需要声明并实现 整数访问支持全部正负整数&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (nullable id)objectAtIndexedSubscript:(NSInteger)number
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (nullable id)objectAtIndexedSubscript:(NSInteger)number
 - (void)setObject:(id)object atIndexedSubscript:(NSInteger)number  
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
 &lt;p&gt;字典下标访问对应&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (nullable id)objectForKeyedSubscript:(id)subscript
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (nullable id)objectForKeyedSubscript:(id)subscript
 - (void)setObject::(id)object forKeyedSubscript:(id)subscript 
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
@@ -983,7 +2113,7 @@ NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
 保证在不设置并行变量的情况下，顺序执行，否则并行执行。
 主要操作有:&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (id &amp;lt;PINOperationReference&amp;gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;- (id &amp;lt;PINOperationReference&amp;gt;)addOperation:(dispatch_block_t)operation; //表示在当前queue里添加一个操作
 
 - (id &amp;lt;PINOperationReference&amp;gt;)addOperation:(dispatch_block_t)block withPriority:(PINOperationQueuePriority)priority
 {
@@ -1078,7 +2208,7 @@ NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
 
 &lt;p&gt;PINCache中包含了PINMemoryCache，PINDiskCache，执行将内存缓存异步同步到硬盘缓存的操作，如下&lt;/p&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//异步读取
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//异步读取
 - (void)objectForKeyAsync:(NSString *)key completion:(PINCacheObjectBlock)block
 {
     if (!key || !block)
@@ -1123,7 +2253,7 @@ NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
 }
 &lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
 
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//异步设置
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;//异步设置
 - (void)setObjectAsync:(id &amp;lt;NSCoding&amp;gt;)object forKey:(NSString *)key withCost:(NSUInteger)cost completion:(PINCacheObjectBlock)block
 {
     if (!key || !object)
@@ -1175,7 +2305,7 @@ NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
       </item>
     
       <item>
-        <title>iOS开发技能树整理</title>
+        <title>iOS开发技能树整理x</title>
         <description>&lt;h1 id=&quot;ios开发技能树整理&quot;&gt;iOS开发技能树整理&lt;/h1&gt;
 
 &lt;p&gt;最近一大波事情忙完，突然闲下来，简单的整理了一下iOS开发相关的技能树。&lt;/p&gt;
@@ -1192,323 +2322,6 @@ NSString *li = name[@&quot;li&quot;] //@&quot;han&quot;
         <category>技术</category>
         
         <category>iOS开发</category>
-        
-        
-      </item>
-    
-      <item>
-        <title>有关浮点数的那些事</title>
-        <description>&lt;h1 id=&quot;有关浮点数的那些事&quot;&gt;有关浮点数的那些事&lt;/h1&gt;
-
-&lt;h2 id=&quot;几个小问题&quot;&gt;几个小问题&lt;/h2&gt;
-
-&lt;ol&gt;
-  &lt;li&gt;浮点数可以准确表示0吗？&lt;/li&gt;
-  &lt;li&gt;浮点数精度为什么是1.19092896-e7&lt;/li&gt;
-  &lt;li&gt;浮点数是否可以判等？&lt;/li&gt;
-  &lt;li&gt;下面两段代码的运行速度如何&lt;/li&gt;
-&lt;/ol&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
-   const float z = 1.111;
-   float y = x;
-   for(int j = 0; j &amp;lt; 10000000; j++)
-   {
-       y *= x;
-       y /= z;
-       y += 0;
-       y -= 0;
-   }
-   return 0;
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;   const float x = 1.1;
-   const float z = 1.111;
-   float y = x;
-   for(int j = 0; j &amp;lt; 10000000; j++)
-   {
-       y *= x;
-       y /= z;
-       y += 0.1;
-       y -= 0.1;
-   }
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-&lt;p&gt;本文会从浮点数的表示方法入手回答一下上面的几个问题。&lt;/p&gt;
-
-&lt;h2 id=&quot;浮点数的表示方法&quot;&gt;浮点数的表示方法&lt;/h2&gt;
-
-&lt;p&gt;IEEE-754对浮点数的定义如下&lt;/p&gt;
-
-&lt;table&gt;
-  &lt;thead&gt;
-    &lt;tr&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Type&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Sign&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Actual Exponent&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Exp (biased)&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Exponent field&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Significand (fraction field)&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;Value&lt;/th&gt;
-    &lt;/tr&gt;
-  &lt;/thead&gt;
-  &lt;tbody&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Zero&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−127&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0.0&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Negative zero&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−127&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−0.0&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;One&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;127&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1.0&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Minus One&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;127&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−1.0&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Smallest denormalized number&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0001&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;±2−23 × 2−126 = ±2−149 ≈ ±1.4×10−45&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;“Middle” denormalized number&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;100 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;±2−1 × 2−126 = ±2−127 ≈ ±5.88×10−39&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Largest denormalized number&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;111 1111 1111 1111 1111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;±(1−2−23) × 2−126 ≈ ±1.18×10−38&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Smallest normalized number&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−126&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0000 0001&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;±2−126 ≈ ±1.18×10−38&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Largest normalized number&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;127&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;254&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1111 1110&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;111 1111 1111 1111 1111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;±(2−2−23) × 2127 ≈ ±3.4×1038&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Positive infinity&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;0&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;128&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;255&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;+∞&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Negative infinity&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;128&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;255&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000 0000 0000 0000 0000 0000&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;−∞&lt;/td&gt;
-    &lt;/tr&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;Not a number&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;*&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;128&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;255&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;1111 1111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;non zero&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;NaN&lt;/td&gt;
-    &lt;/tr&gt;
-  &lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;Sign bit can be either 0 or 1 .&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;从上述定义中可以回答第一个问题：&lt;strong&gt;浮点数可以精确表示0&lt;/strong&gt;，用代码验证即&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float zero1 = 0.0;
-float zero2 = 0.0;
-if (zero1 == zero2) 
-{
-	printf(@&quot;zero1 = zero2&quot;); //must setup in if block
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;总结&lt;strong&gt;浮点数定义的规律&lt;/strong&gt;如下：&lt;/p&gt;
-
-&lt;ul&gt;
-  &lt;li&gt;指数位为00000000时，
-    &lt;ol&gt;
-      &lt;li&gt;数字位为全0时，若符号位为0，则表示正零0.0 ；若符号位为1时，表示负零-0.0&lt;/li&gt;
-      &lt;li&gt;数字位不全为零，表示非标浮点数(denormalized number)，此时默认第一位不是1，而是0（标准浮点数为了更大限度的表示数字，认为数字位都是小数点之后的数，并且默认小数点前一位为1）&lt;/li&gt;
-    &lt;/ol&gt;
-  &lt;/li&gt;
-  &lt;li&gt;指数位为11111111时，
-    &lt;ol&gt;
-      &lt;li&gt;数字为全为0时，若符号位为0 ，则表示正无穷，若符号位为1，则表示负无穷&lt;/li&gt;
-      &lt;li&gt;数字为补全为0，表示这不是一个数NaN&lt;/li&gt;
-    &lt;/ol&gt;
-  &lt;/li&gt;
-  &lt;li&gt;因此指数位范围为00000001~11111110 （1~254）
-    &lt;ol&gt;
-      &lt;li&gt;而为了表示小数部分，指数部分需要减127，因此，指数实际范围为-126~127，标准浮点数指数能表示的范围也就是 2^-126 ~2^127&lt;/li&gt;
-    &lt;/ol&gt;
-  &lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&quot;浮点数的精度&quot;&gt;浮点数的精度&lt;/h2&gt;
-
-&lt;p&gt;浮点数的精度宏FLT_EPSILON = 1.19092896-e7。
-IEEE对FLT_EPSILON的定义为&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;再回到上一章看浮点数，1.0 = 指数位和数字为都为0的数，即&lt;/p&gt;
-
-&lt;table&gt;
-  &lt;thead&gt;
-    &lt;tr&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;指数位&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;数字位&lt;/th&gt;
-    &lt;/tr&gt;
-  &lt;/thead&gt;
-  &lt;tbody&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;01111111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000…0000&lt;/td&gt;
-    &lt;/tr&gt;
-  &lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;p&gt;而满足上述定义的数只能是在数字位加1的数,即&lt;/p&gt;
-
-&lt;table&gt;
-  &lt;thead&gt;
-    &lt;tr&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;指数位&lt;/th&gt;
-      &lt;th style=&quot;text-align: center&quot;&gt;数字位&lt;/th&gt;
-    &lt;/tr&gt;
-  &lt;/thead&gt;
-  &lt;tbody&gt;
-    &lt;tr&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;01111111&lt;/td&gt;
-      &lt;td style=&quot;text-align: center&quot;&gt;000…000&lt;strong&gt;1&lt;/strong&gt;&lt;/td&gt;
-    &lt;/tr&gt;
-  &lt;/tbody&gt;
-&lt;/table&gt;
-
-&lt;p&gt;表示出来即2&lt;sup&gt;-23&lt;/sup&gt; = 1.19092896-e7.&lt;/p&gt;
-
-&lt;p&gt;另外，2&lt;sup&gt;-23&lt;/sup&gt; 也代表了浮点数类型能够精确表示的最小一位数，我想把这个值作为浮点数的精度也有这方面的考虑。&lt;/p&gt;
-
-&lt;h2 id=&quot;浮点数的比较&quot;&gt;浮点数的比较&lt;/h2&gt;
-
-&lt;p&gt;首先明确一点，所有浮点数的比较都是通过逐一对比比特的方式进行。&lt;/p&gt;
-
-&lt;p&gt;因此，两个比特位完全一致，用&lt;code class=&quot;highlighter-rouge&quot;&gt;==&lt;/code&gt;判断完全可行。
-如&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float a = 0.5;
-float b = 0.5;
-if (a == b)
-{
-	printf(&quot;isEqual&quot;);\\does executed
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用&lt;code class=&quot;highlighter-rouge&quot;&gt;==&lt;/code&gt;,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如&lt;/p&gt;
-
-&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;float y = 1000000.3;
-float x = 0.3;
-float k = 1000000;
-float z = y-k-x;
-if (fabsf(z) &amp;lt; FLT_EPSILON) {
-   NSLog(@&quot;Z &amp;lt; FLT_EPSILON&quot;);
-}
-z = y-x-k;
-if (fabsf(z) &amp;lt; FLT_EPSILON) {
-    NSLog(@&quot;Z &amp;lt; FLT_EPSILON&quot;); \\only this executed
-}
-&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
-
-&lt;p&gt;直觉上执行&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k-x&lt;/code&gt;也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。&lt;/p&gt;
-
-&lt;p&gt;&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k-x &amp;gt;= FLT_EPSILON&lt;/code&gt;是因为&lt;code class=&quot;highlighter-rouge&quot;&gt;y-k&lt;/code&gt;都是数字较大，指数位较高，在运算过程中实施阶数对其操作的时候舍掉了小数位后0.3的精度，因此，计算出的z值实际是0.01+多。&lt;/p&gt;
-
-&lt;p&gt;因此，&lt;strong&gt;对于浮点数，比较大小永远是一个伪命题&lt;/strong&gt;。&lt;/p&gt;
-
-&lt;p&gt;对精度要求不高的地方用一用无妨，关键数据一定要用整数类型.&lt;/p&gt;
-
-&lt;h2 id=&quot;非规格化浮点数denormalized-float&quot;&gt;非规格化浮点数（Denormalized float）&lt;/h2&gt;
-
-&lt;p&gt;对于问题4,相信很多同学会认为+/-0 计算量较小，对运算速度影响小，然而实际测试结果却不是。导致低一段代码性能低的原因为，不断地 y*x/z产生了非规格化浮点数， 而在+/-0的情况下，之后的运算都是Denormalized float之间的运算&lt;/p&gt;
-
-&lt;p&gt;而第二段代码+/- 0.1 实际上提升了运算阶数，使得运算的数值不是Denormalized float.&lt;/p&gt;
-
-&lt;p&gt;github 上有个问答http://stackoverflow.com/questions/9314534/why-does-changing-0-1f-to-0-slow-down-performance-by-10x 有人测试过，使用第一段代码性能比第而段代码&lt;strong&gt;慢十倍&lt;/strong&gt;。&lt;/p&gt;
-
-&lt;p&gt;链接中大牛们的回答正是这个问题的答案，这都是由于CPU对非规格化浮点数的支持导致的。&lt;/p&gt;
-
-&lt;p&gt;一般的浮点数，默认数字位从小数点后第一位开始，小数点前一位为1.&lt;/p&gt;
-
-&lt;p&gt;而非规格化浮点数为了增加对更小的数字的支持，打破了小数点前一位为1的限制，即将浮点数的表示范围增加了23位（二进制下）。&lt;/p&gt;
-
-&lt;h2 id=&quot;结语&quot;&gt;结语&lt;/h2&gt;
-
-&lt;p&gt;关于浮点数的那些事到这结束啦，欢迎大家一起讨论~&lt;/p&gt;
-
-</description>
-        <pubDate>Fri, 21 Oct 2016 05:00:00 +0800</pubDate>
-        <link>http://localhost:4000/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</link>
-        <guid isPermaLink="true">http://localhost:4000/2016/10/21/%E6%9C%89%E5%85%B3%E6%B5%AE%E7%82%B9%E6%95%B0%E7%9A%84%E9%82%A3%E4%BA%9B%E4%BA%8B/</guid>
-        
-        <category>技术</category>
-        
-        <category>计算机基础</category>
         
         
       </item>

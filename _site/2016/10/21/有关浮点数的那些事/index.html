@@ -203,7 +203,7 @@
   <li>下面两段代码的运行速度如何</li>
 </ol>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   const float x = 1.1;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   const float x = 1.1;
    const float z = 1.111;
    float y = x;
    for(int j = 0; j &lt; 10000000; j++)
@@ -216,7 +216,7 @@
    return 0;
 </code></pre></div></div>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   const float x = 1.1;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   const float x = 1.1;
    const float z = 1.111;
    float y = x;
    for(int j = 0; j &lt; 10000000; j++)
@@ -363,7 +363,7 @@
 
 <p>从上述定义中可以回答第一个问题：<strong>浮点数可以精确表示0</strong>，用代码验证即</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float zero1 = 0.0;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float zero1 = 0.0;
 float zero2 = 0.0;
 if (zero1 == zero2) 
 {
@@ -398,7 +398,7 @@ if (zero1 == zero2)
 <p>浮点数的精度宏FLT_EPSILON = 1.19092896-e7。
 IEEE对FLT_EPSILON的定义为</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FLT_EPSILON the minimum positive number such that 1.0 + FLT_EPSILON != 1.0.
 </code></pre></div></div>
 
 <p>再回到上一章看浮点数，1.0 = 指数位和数字为都为0的数，即</p>
@@ -443,10 +443,10 @@ IEEE对FLT_EPSILON的定义为</p>
 
 <p>首先明确一点，所有浮点数的比较都是通过逐一对比比特的方式进行。</p>
 
-<p>因此，两个比特位完全一致，用<code class="highlighter-rouge">==</code>判断完全可行。
+<p>因此，两个比特位完全一致，用<code class="language-plaintext highlighter-rouge">==</code>判断完全可行。
 如</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float a = 0.5;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float a = 0.5;
 float b = 0.5;
 if (a == b)
 {
@@ -454,9 +454,9 @@ if (a == b)
 }
 </code></pre></div></div>
 
-<p>然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用<code class="highlighter-rouge">==</code>,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如</p>
+<p>然而我们常见的判等往往会经过一系列运算，并且有经验的老司机都不会直接对浮点数判等使用<code class="language-plaintext highlighter-rouge">==</code>,而是和FLT_EPSILON作对比，即使这样，浮点数在运算中也常常会出现一些和期望值相悖的情况，比如</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float y = 1000000.3;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>float y = 1000000.3;
 float x = 0.3;
 float k = 1000000;
 float z = y-k-x;
@@ -469,9 +469,9 @@ if (fabsf(z) &lt; FLT_EPSILON) {
 }
 </code></pre></div></div>
 
-<p>直觉上执行<code class="highlighter-rouge">y-k-x</code>也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。</p>
+<p>直觉上执行<code class="language-plaintext highlighter-rouge">y-k-x</code>也应该等于0， 但是实际情况却相反，出现这种情况就和浮点数的运算有关。</p>
 
-<p><code class="highlighter-rouge">y-k-x &gt;= FLT_EPSILON</code>是因为<code class="highlighter-rouge">y-k</code>都是数字较大，指数位较高，在运算过程中实施阶数对其操作的时候舍掉了小数位后0.3的精度，因此，计算出的z值实际是0.01+多。</p>
+<p><code class="language-plaintext highlighter-rouge">y-k-x &gt;= FLT_EPSILON</code>是因为<code class="language-plaintext highlighter-rouge">y-k</code>都是数字较大，指数位较高，在运算过程中实施阶数对其操作的时候舍掉了小数位后0.3的精度，因此，计算出的z值实际是0.01+多。</p>
 
 <p>因此，<strong>对于浮点数，比较大小永远是一个伪命题</strong>。</p>
 
@@ -537,9 +537,9 @@ if (fabsf(z) &lt; FLT_EPSILON) {
                     
                     
                     <li class="next">
-                        <a href="/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/" data-toggle="tooltip" data-placement="top" title="iOS开发技能树整理">
+                        <a href="/2017/03/21/iOS%E5%BC%80%E5%8F%91%E6%8A%80%E8%83%BD%E6%A0%91%E6%95%B4%E7%90%86/" data-toggle="tooltip" data-placement="top" title="iOS开发技能树整理x">
                         Next<br>
-                        <span>iOS开发技能树整理</span>
+                        <span>iOS开发技能树整理x</span>
                         </a>
                     </li>
                     
@@ -593,7 +593,7 @@ if (fabsf(z) &lt; FLT_EPSILON) {
                     <div class="tags">
         				
                             
-                				<a href="/tags/#技术" title="技术" rel="7">
+                				<a href="/tags/#技术" title="技术" rel="8">
                                     技术
                                 </a>
                             
@@ -601,7 +601,7 @@ if (fabsf(z) &lt; FLT_EPSILON) {
                             
         				
                             
-                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="7">
                                     iOS开发
                                 </a>
                             
@@ -617,15 +617,19 @@ if (fabsf(z) &lt; FLT_EPSILON) {
                             
         				
                             
-                				<a href="/tags/#源码" title="源码" rel="3">
+                				<a href="/tags/#源码" title="源码" rel="4">
                                     源码
                                 </a>
                             
         				
                             
-                				<a href="/tags/#runtime" title="runtime" rel="2">
+                				<a href="/tags/#runtime" title="runtime" rel="3">
                                     runtime
                                 </a>
+                            
+        				
+                            
+        				
                             
         				
         			</div>
@@ -745,7 +749,7 @@ if (fabsf(z) &lt; FLT_EPSILON) {
                     
                 </ul>
                 <p class="copyright text-muted">
-                    Copyright &copy; D Tech Blog 2017
+                    Copyright &copy; D Tech Blog 2022
                     <br>
                     <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
             <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>

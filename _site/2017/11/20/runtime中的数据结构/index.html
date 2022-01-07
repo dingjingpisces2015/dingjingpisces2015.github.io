@@ -209,7 +209,7 @@ SrtipedMap是一种根据传入指针将对象映射到数组不同位置的Hash
 
 <p>以下是StripedMap源码，留下了关键部分。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>// StripedMap&lt;T&gt; is a map of void* -&gt; T, sized appropriately
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>// StripedMap&lt;T&gt; is a map of void* -&gt; T, sized appropriately
 // for cache-friendly lock striping.
 // For example, this may be used as StripedMap&lt;spinlock_t&gt;
 // or as StripedMap&lt;SomeStruct&gt; where SomeStruct stores a spin lock.
@@ -255,7 +255,7 @@ class StripedMap {
 
 <p>下面用于记录对象retainCount的RefcountMap就是一个DenseMap.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct SideTable {
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>struct SideTable {
     spinlock_t slock;
     RefcountMap refcnts;
     weak_table_t weak_table;
@@ -266,7 +266,7 @@ class StripedMap {
 
 <p>DenseMap的成员变量有</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  BucketT *Buckets;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  BucketT *Buckets;
   unsigned NumEntries;
   unsigned NumTombstones;
   unsigned NumBuckets;
@@ -301,7 +301,7 @@ class StripedMap {
 
 <p>以下为源码</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>template&lt;typename LookupKeyT&gt;
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>template&lt;typename LookupKeyT&gt;
   bool LookupBucketFor(const LookupKeyT &amp;Val,
                        const BucketT *&amp;FoundBucket) const {
     const BucketT *BucketsPtr = getBuckets();
@@ -412,6 +412,13 @@ Srti... | D Tech Blog " >
                     </li>
                     
                     
+                    <li class="next">
+                        <a href="/2017/11/27/Autorelease%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" data-toggle="tooltip" data-placement="top" title="Autorelease的实现原理">
+                        Next<br>
+                        <span>Autorelease的实现原理</span>
+                        </a>
+                    </li>
+                    
                 </ul>
 
 
@@ -462,7 +469,7 @@ Srti... | D Tech Blog " >
                     <div class="tags">
         				
                             
-                				<a href="/tags/#技术" title="技术" rel="7">
+                				<a href="/tags/#技术" title="技术" rel="8">
                                     技术
                                 </a>
                             
@@ -470,7 +477,7 @@ Srti... | D Tech Blog " >
                             
         				
                             
-                				<a href="/tags/#iOS开发" title="iOS开发" rel="6">
+                				<a href="/tags/#iOS开发" title="iOS开发" rel="7">
                                     iOS开发
                                 </a>
                             
@@ -486,15 +493,19 @@ Srti... | D Tech Blog " >
                             
         				
                             
-                				<a href="/tags/#源码" title="源码" rel="3">
+                				<a href="/tags/#源码" title="源码" rel="4">
                                     源码
                                 </a>
                             
         				
                             
-                				<a href="/tags/#runtime" title="runtime" rel="2">
+                				<a href="/tags/#runtime" title="runtime" rel="3">
                                     runtime
                                 </a>
+                            
+        				
+                            
+        				
                             
         				
         			</div>
@@ -614,7 +625,7 @@ Srti... | D Tech Blog " >
                     
                 </ul>
                 <p class="copyright text-muted">
-                    Copyright &copy; D Tech Blog 2017
+                    Copyright &copy; D Tech Blog 2022
                     <br>
                     <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
             <span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
